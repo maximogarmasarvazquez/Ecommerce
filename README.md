@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js" alt="Next.js">
   <img src="https://img.shields.io/badge/Supabase-3FFCFE?style=for-the-badge&logo=supabase" alt="Supabase">
-  <img src="https://img.shields.io/badge/Stripe-635BFF?style=for-the-badge&logo=stripe" alt="Stripe">
+  <img src="https://img.shields.io/badge/Mercado%20Pago-00A1E0?style=for-the-badge&logo=mercadopago" alt="Mercado Pago">
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript" alt="TypeScript">
   <img src="https://img.shields.io/badge/Tailwind-06B6D4?style=-for-the-badge&logo=tailwind-css" alt="Tailwind">
 </p>
@@ -14,7 +14,7 @@ Tienda online completa para la venta de parrillas y accesorios, construida con t
 
 - **Catálogo de productos** con categorías, búsqueda y filtros
 - **Carrito de compras** persistido en localStorage
-- **Checkout con Stripe** para pagos seguros
+- **Checkout con Mercado Pago** para pagos seguros
 - **Autenticación** de usuarios con Supabase Auth
 - **Gestión de pedidos** y seguimiento
 - **Panel de cuenta** para usuarios registrados
@@ -28,7 +28,7 @@ Tienda online completa para la venta de parrillas y accesorios, construida con t
 |------------|-------------|
 | [Next.js 16](https://nextjs.org) | Framework React con App Router |
 | [Supabase](https://supabase.com) | Backend-as-a-Service: DB, Auth, Storage |
-| [Stripe](https://stripe.com) | Procesamiento de pagos |
+| [Mercado Pago](https://www.mercadopago.com) | Procesamiento de pagos |
 | [Tailwind CSS](https://tailwindcss.com) | Framework de estilos |
 | [TypeScript](https://typescriptlang.org) | Tipado estático |
 | [Lucide React](https://lucide.dev) | Iconos |
@@ -59,7 +59,7 @@ mi-ecommerce/
 
 - Node.js 18+
 - Cuenta de [Supabase](https://supabase.com)
-- Cuenta de [Stripe](https://stripe.com)
+- Cuenta de [Mercado Pago](https://www.mercadopago.com)
 
 ## ⚙️ Instalación
 
@@ -82,10 +82,9 @@ Crea un archivo `.env.local` con:
 NEXT_PUBLIC_SUPABASE_URL=tu_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_supabase_anon_key
 
-# Stripe
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=tu_stripe_publishable_key
-STRIPE_SECRET_KEY=tu_stripe_secret_key
-STRIPE_WEBHOOK_SECRET=tu_stripe_webhook_secret
+# Mercado Pago
+MERCADOPAGO_ACCESS_TOKEN=tu_mercadopago_access_token
+NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY=tu_mercadopago_public_key
 
 # App
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
@@ -124,9 +123,9 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 - Cálculo automático de totales
 
 ### 💳 Checkout
-- Integración con Stripe Checkout
+- Integración con Mercado Pago
 - Redirección a página de éxito
-- Almacenamiento de session_id para tracking
+- Almacenamiento de preference_id para tracking
 
 ### 👤 Autenticación
 - Registro e inicio de sesión
@@ -136,7 +135,7 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 ### 📦 Gestión de Pedidos
 - Historial de pedidos por usuario
 - Estados: pending, paid, shipped, delivered
-- Tracking de payment en Stripe
+- Tracking de payment en Mercado Pago
 
 ### ⭐ Reseñas
 - Sistema de rating 1-5 estrellas
@@ -162,8 +161,8 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 ```
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-STRIPE_SECRET_KEY
+MERCADOPAGO_ACCESS_TOKEN
+NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY
 NEXT_PUBLIC_SITE_URL=https://tu-dominio.com
 ```
 
@@ -177,4 +176,4 @@ MIT License - ver archivo LICENSE para más detalles.
 
 ---
 
-<p align="center">Construido con ❤️ usando Next.js + Supabase + Stripe</p>
+<p align="center">Construido con ❤️ usando Next.js + Supabase + Mercado Pago</p>

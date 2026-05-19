@@ -4,9 +4,6 @@ import { useState } from 'react'
 import { useCart } from '@/hooks/use-cart'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { loadStripe } from '@stripe/stripe-js'
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
 export default function CheckoutPage() {
   const { items, total, clearCart } = useCart()
@@ -28,25 +25,55 @@ export default function CheckoutPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
+  const createMercadoPagoPreference = async () => {
+    const preference = {
+      items: items.map(item => ({
+        title: item.name,
+        quantity: item.quantity,
+        unit_price: item.price / 100,
+        currency_id: 'ARS',
+      })),
+      payer: {
+        name: formData.name,
+        email: formData.email,
+      },
+      back_urls: {
+        success: `${window.location.origin}/checkout/success`,
+        failure: `${window.location.origin}/checkout`,
+        pending: `${window.location.origin}/checkout`,
+      },
+      external_reference: '',
+    }
+
+    const response = await fetch('/api/mercadopago/create-preference', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(preference),
+    })
+
+    const data = await response.json()
+    return data
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
-      // Create order in Supabase (pendiente de pago)
       const { data: { user } } = await supabase.auth.getUser()
 
       const orderData = {
         customer_id: user?.id,
         status: 'pending',
         total_amount: total,
-        shipping_cost: 0, // TODO: calcular envío
+        shipping_cost: 0,
         shipping_address: {
           name: formData.name,
           address: formData.address,
           city: formData.city,
           province: formData.province,
           postal_code: formData.postalCode,
+          phone: formData.phone,
         },
       }
 
@@ -58,7 +85,6 @@ export default function CheckoutPage() {
 
       if (orderError) throw orderError
 
-      // Create order items
       const orderItems = items.map(item => ({
         order_id: order.id,
         product_id: item.id,
@@ -72,15 +98,19 @@ export default function CheckoutPage() {
 
       if (itemsError) throw itemsError
 
-      // Clear cart and redirect to success
-      clearCart()
-      router.push(`/checkout/success?order_id=${order.id}`)
+      const mpData = await createMercadoPagoPreference()
+      
+      if (mpData.init_point) {
+        window.location.href = mpData.init_point
+      } else {
+        clearCart()
+        router.push(`/checkout/success?order_id=${order.id}`)
+      }
     } catch (error) {
       console.error('Error:', error)
       alert('Hubo un error al procesar el pedido')
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   if (items.length === 0) {

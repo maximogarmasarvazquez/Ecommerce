@@ -1,13 +1,26 @@
 'use client'
 
 import Link from 'next/link'
-import { ShoppingCart, User, Menu } from 'lucide-react'
+import { ShoppingCart, User, Menu, Settings } from 'lucide-react'
 import { useCart } from '@/hooks/use-cart'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 export function Navbar() {
   const { itemCount } = useCart()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const supabase = createClient()
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.user_metadata?.role === 'admin') {
+        setIsAdmin(true)
+      }
+    }
+    checkAdmin()
+  }, [supabase])
 
   return (
     <nav className="bg-white shadow-sm border-b">
@@ -32,6 +45,11 @@ export function Navbar() {
             <Link href="/products?category=accesorios" className="text-gray-600 hover:text-gray-900">
               Accesorios
             </Link>
+            {isAdmin && (
+              <Link href="/admin" className="text-orange-600 hover:text-orange-700 font-medium">
+                Admin
+              </Link>
+            )}
           </div>
 
           {/* Actions */}
@@ -74,6 +92,11 @@ export function Navbar() {
               <Link href="/products?category=accesorios" className="text-gray-600">
                 Accesorios
               </Link>
+              {isAdmin && (
+                <Link href="/admin" className="text-orange-600 font-medium">
+                  Admin
+                </Link>
+              )}
             </div>
           </div>
         )}
