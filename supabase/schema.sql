@@ -31,8 +31,8 @@ DROP FUNCTION IF EXISTS is_admin CASCADE;
 DROP FUNCTION IF EXISTS is_owner(UUID) CASCADE;
 DROP FUNCTION IF EXISTS update_updated_at_column CASCADE;
 DROP FUNCTION IF EXISTS handle_new_user CASCADE;
-DROP FUNCTION IF EXISTS validate_inventory CASCADE;
 DROP FUNCTION IF EXISTS restore_inventory_on_cancel CASCADE;
+DROP FUNCTION IF EXISTS create_order CASCADE;
 
 -- ============================================
 -- 3. TABLA PROFILES
@@ -80,6 +80,8 @@ CREATE TABLE products (
     is_featured BOOLEAN NOT NULL DEFAULT false,
 
     is_active BOOLEAN NOT NULL DEFAULT true,
+
+    deleted_at TIMESTAMPTZ,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -138,7 +140,18 @@ CREATE TABLE orders (
 
     shipping_address JSONB DEFAULT '{}'::jsonb,
 
+    payment_status TEXT NOT NULL DEFAULT 'pending',
+
+    payment_id TEXT,
+
+    merchant_order_id TEXT,
+
     external_reference TEXT,
+
+    paid_at TIMESTAMPTZ,
+    cancelled_at TIMESTAMPTZ,
+    shipped_at TIMESTAMPTZ,
+    delivered_at TIMESTAMPTZ,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -183,17 +196,20 @@ ON products(category);
 CREATE INDEX idx_products_active
 ON products(is_active);
 
+CREATE INDEX idx_products_deleted
+ON products(deleted_at);
+
 CREATE INDEX idx_orders_customer_id
 ON orders(customer_id);
+
+CREATE INDEX idx_orders_status
+ON orders(status);
 
 CREATE INDEX idx_order_items_order_id
 ON order_items(order_id);
 
 CREATE INDEX idx_customers_user_id
 ON customers(user_id);
-
-CREATE INDEX idx_orders_status
-ON orders(status);
 
 CREATE INDEX idx_products_featured
 ON products(is_featured);
@@ -243,7 +259,8 @@ EXECUTE FUNCTION update_updated_at_column();
 CREATE OR REPLACE FUNCTION is_admin()
 RETURNS BOOLEAN
 LANGUAGE sql
-SECURITY DEFINER SET search_path = public
+SECURITY DEFINER
+SET search_path = public
 STABLE
 AS $$
     SELECT EXISTS (
@@ -261,7 +278,8 @@ $$;
 CREATE OR REPLACE FUNCTION is_owner(owner_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
-SECURITY DEFINER SET search_path = public
+SECURITY DEFINER
+SET search_path = public
 STABLE
 AS $$
     SELECT auth.uid() = owner_id;
@@ -274,7 +292,8 @@ $$;
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-SECURITY DEFINER SET search_path = public
+SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
 
@@ -322,20 +341,21 @@ FOR EACH ROW
 EXECUTE FUNCTION handle_new_user();
 
 -- ============================================
--- 15. CREAR ORDEN (SERVER-SIDE TRANSACTION)
+-- 15. CREATE ORDER SECURE FUNCTION
 -- ============================================
 
 CREATE OR REPLACE FUNCTION create_order(
-    p_customer_id UUID,
     p_items JSONB,
     p_shipping_address JSONB,
     p_shipping_cost INTEGER DEFAULT 0
 )
 RETURNS JSONB
 LANGUAGE plpgsql
-SECURITY DEFINER SET search_path = public
+SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
+    v_customer_id UUID;
     v_order_id UUID;
     v_total INTEGER := 0;
     v_item JSONB;
@@ -344,28 +364,69 @@ DECLARE
     v_price INTEGER;
     v_inventory INTEGER;
 BEGIN
-    -- Validar carrito no vacio
-    IF p_items IS NULL OR jsonb_array_length(p_items) = 0 THEN
+
+    -- ============================================
+    -- VALIDAR AUTH
+    -- ============================================
+
+    IF auth.uid() IS NULL THEN
+        RAISE EXCEPTION 'Usuario no autenticado';
+    END IF;
+
+    -- ============================================
+    -- VALIDAR CUSTOMER
+    -- ============================================
+
+    SELECT id
+    INTO v_customer_id
+    FROM customers
+    WHERE user_id = auth.uid();
+
+    IF v_customer_id IS NULL THEN
+        RAISE EXCEPTION 'Cliente inexistente';
+    END IF;
+
+    -- ============================================
+    -- VALIDAR CARRITO
+    -- ============================================
+
+    IF p_items IS NULL
+    OR jsonb_array_length(p_items) = 0 THEN
         RAISE EXCEPTION 'Carrito vacio';
     END IF;
 
-    -- Validar direccion de envio
+    IF jsonb_array_length(p_items) > 100 THEN
+        RAISE EXCEPTION 'Demasiados items';
+    END IF;
+
+    -- ============================================
+    -- VALIDAR SHIPPING
+    -- ============================================
+
+    IF p_shipping_cost < 0 THEN
+        RAISE EXCEPTION 'Shipping invalido';
+    END IF;
+
     IF p_shipping_address IS NULL
        OR p_shipping_address->>'name' IS NULL
        OR p_shipping_address->>'address' IS NULL
        OR p_shipping_address->>'city' IS NULL THEN
-        RAISE EXCEPTION 'Direccion de envio incompleta';
+        RAISE EXCEPTION 'Direccion incompleta';
     END IF;
 
-    -- Crear orden
+    -- ============================================
+    -- CREAR ORDEN
+    -- ============================================
+
     INSERT INTO orders (
         customer_id,
         status,
         total_amount,
         shipping_cost,
         shipping_address
-    ) VALUES (
-        p_customer_id,
+    )
+    VALUES (
+        v_customer_id,
         'pending',
         0,
         p_shipping_cost,
@@ -373,45 +434,69 @@ BEGIN
     )
     RETURNING id INTO v_order_id;
 
-    -- Procesar cada item del carrito
-    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    -- ============================================
+    -- PROCESAR ITEMS
+    -- ============================================
+
+    FOR v_item IN
+        SELECT *
+        FROM jsonb_array_elements(p_items)
     LOOP
+
         v_product_id := (v_item->>'product_id')::UUID;
         v_quantity := (v_item->>'quantity')::INTEGER;
 
         IF v_quantity <= 0 THEN
-            RAISE EXCEPTION 'Cantidad invalida para producto %', v_product_id;
+            RAISE EXCEPTION 'Cantidad invalida';
         END IF;
 
-        -- Bloquear producto y obtener datos reales de DB
+        -- ============================================
+        -- BLOQUEAR PRODUCTO
+        -- ============================================
+
         SELECT price, inventory
         INTO v_price, v_inventory
         FROM products
         WHERE id = v_product_id
+        AND is_active = true
+        AND deleted_at IS NULL
         FOR UPDATE;
 
-        -- Validar que el producto exista
+        -- ============================================
+        -- VALIDAR PRODUCTO
+        -- ============================================
+
         IF v_price IS NULL THEN
-            RAISE EXCEPTION 'Producto % inexistente', v_product_id;
+            RAISE EXCEPTION 'Producto inexistente o inactivo';
         END IF;
 
-        -- Validar inventario suficiente
+        -- ============================================
+        -- VALIDAR INVENTARIO
+        -- ============================================
+
         IF v_inventory < v_quantity THEN
-            RAISE EXCEPTION 'Inventario insuficiente para producto %', v_product_id;
+            RAISE EXCEPTION 'Inventario insuficiente';
         END IF;
 
-        -- Descontar inventario
+        -- ============================================
+        -- DESCONTAR INVENTARIO
+        -- ============================================
+
         UPDATE products
         SET inventory = inventory - v_quantity
         WHERE id = v_product_id;
 
-        -- Insertar item con precio REAL (no el enviado por frontend)
+        -- ============================================
+        -- INSERTAR ITEM
+        -- ============================================
+
         INSERT INTO order_items (
             order_id,
             product_id,
             quantity,
             unit_price
-        ) VALUES (
+        )
+        VALUES (
             v_order_id,
             v_product_id,
             v_quantity,
@@ -419,17 +504,27 @@ BEGIN
         );
 
         v_total := v_total + (v_price * v_quantity);
+
     END LOOP;
 
-    -- Actualizar total de la orden (calculado server-side)
+    -- ============================================
+    -- ACTUALIZAR TOTAL
+    -- ============================================
+
     UPDATE orders
     SET total_amount = v_total + p_shipping_cost
     WHERE id = v_order_id;
 
+    -- ============================================
+    -- RESPONSE
+    -- ============================================
+
     RETURN jsonb_build_object(
         'order_id', v_order_id,
-        'total_amount', v_total + p_shipping_cost
+        'total_amount', v_total + p_shipping_cost,
+        'status', 'pending'
     );
+
 END;
 $$;
 
@@ -444,18 +539,26 @@ AS $$
 DECLARE
     item RECORD;
 BEGIN
+
     IF OLD.status != 'cancelled'
     AND NEW.status = 'cancelled' THEN
+
+        NEW.cancelled_at = NOW();
+
         FOR item IN
             SELECT product_id, quantity
             FROM order_items
             WHERE order_id = NEW.id
         LOOP
+
             UPDATE products
             SET inventory = inventory + item.quantity
             WHERE id = item.product_id;
+
         END LOOP;
+
     END IF;
+
     RETURN NEW;
 END;
 $$;
@@ -531,6 +634,7 @@ ON products
 FOR SELECT
 USING (
     is_active = true
+    AND deleted_at IS NULL
 );
 
 CREATE POLICY "Admins insert products"
@@ -617,9 +721,6 @@ USING (
     )
 );
 
--- Los inserts de orders SOLO se hacen via create_order() function (server-side)
--- Policy de INSERT eliminada por seguridad
-
 CREATE POLICY "Admins select orders"
 ON orders
 FOR SELECT
@@ -660,9 +761,6 @@ USING (
         WHERE c.user_id = auth.uid()
     )
 );
-
--- Los inserts de order_items SOLO se via create_order() function (server-side)
--- Policy de INSERT eliminada por seguridad
 
 CREATE POLICY "Admins select order items"
 ON order_items
@@ -706,12 +804,12 @@ GRANT SELECT, UPDATE
 ON customers
 TO authenticated;
 
--- ORDERS: SOLO SELECT via RLS, INSERT via create_order()
+-- ORDERS
 GRANT SELECT
 ON orders
 TO authenticated;
 
--- ORDER ITEMS: SOLO SELECT via RLS, INSERT via create_order()
+-- ORDER ITEMS
 GRANT SELECT
 ON order_items
 TO authenticated;
@@ -721,8 +819,10 @@ GRANT SELECT, UPDATE
 ON profiles
 TO authenticated;
 
--- FUNCTION CREATE_ORDER
-GRANT EXECUTE ON FUNCTION create_order TO authenticated;
+-- CREATE_ORDER FUNCTION
+GRANT EXECUTE
+ON FUNCTION create_order
+TO authenticated;
 
 -- SERVICE ROLE
 GRANT SELECT, INSERT, UPDATE, DELETE
