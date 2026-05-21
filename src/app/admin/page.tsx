@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, ShoppingCart, Plus, Edit, Trash2, Eye } from 'lucide-react'
+import { Package, ShoppingCart, Users, Plus, Edit, Trash2, Eye, Image as ImageIcon } from 'lucide-react'
 
 interface Product {
   id: string
@@ -26,13 +26,30 @@ interface Order {
   shipping_address: any
 }
 
+interface CustomerRecord {
+  id: string
+  user_id: string
+  full_name: string | null
+  email: string | null
+  phone: string | null
+  shipping_address: any
+  created_at: string
+}
+
+interface Category {
+  name: string
+  slug: string
+}
+
 export default function AdminPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [activeTab, setActiveTab] = useState<'products' | 'orders'>('products')
+  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'customers'>('products')
   const [products, setProducts] = useState<Product[]>([])
   const [orders, setOrders] = useState<Order[]>([])
+  const [customers, setCustomers] = useState<CustomerRecord[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const router = useRouter()
@@ -66,6 +83,8 @@ export default function AdminPage() {
     setIsAdmin(true)
     fetchProducts()
     fetchOrders()
+    fetchCustomers()
+    fetchCategories()
     setLoading(false)
   }
 
@@ -85,6 +104,24 @@ export default function AdminPage() {
       .order('created_at', { ascending: false })
     
     if (data) setOrders(data)
+  }
+
+  const fetchCustomers = async () => {
+    const { data } = await supabase
+      .from('customers')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (data) setCustomers(data)
+  }
+
+  const fetchCategories = async () => {
+    const { data } = await supabase
+      .from('categories')
+      .select('name, slug')
+      .order('name')
+
+    if (data) setCategories(data)
   }
 
   const handleDelete = async (id: string) => {
@@ -141,6 +178,13 @@ export default function AdminPage() {
         >
           <ShoppingCart className="w-5 h-5 inline mr-2" />
           Pedidos
+        </button>
+        <button
+          onClick={() => setActiveTab('customers')}
+          className={`pb-2 px-4 font-semibold ${activeTab === 'customers' ? 'border-b-2 border-orange-600 text-orange-600' : 'text-gray-500'}`}
+        >
+          <Users className="w-5 h-5 inline mr-2" />
+          Clientes
         </button>
       </div>
 
@@ -247,10 +291,54 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* Customers Tab */}
+      {activeTab === 'customers' && (
+        <div>
+          <h2 className="text-xl font-semibold mb-4">Todos los Clientes</h2>
+          <div className="bg-white border rounded-lg overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Nombre</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Email</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Telefono</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Direccion</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold">Registro</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                      No hay clientes registrados
+                    </td>
+                  </tr>
+                ) : (
+                  customers.map((c) => (
+                    <tr key={c.id} className="border-t">
+                      <td className="px-4 py-3">{c.full_name || '-'}</td>
+                      <td className="px-4 py-3">{c.email || '-'}</td>
+                      <td className="px-4 py-3">{c.phone || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500 max-w-[200px] truncate">
+                        {c.shipping_address?.address || '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {new Date(c.created_at).toLocaleDateString('es-AR')}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Modal */}
       {showModal && (
         <ProductModal
           product={editingProduct}
+          categories={categories}
           onSave={handleSaveProduct}
           onClose={() => { setShowModal(false); setEditingProduct(null) }}
         />
@@ -259,7 +347,7 @@ export default function AdminPage() {
   )
 }
 
-function ProductModal({ product, onSave, onClose }: { product: Product | null, onSave: (p: Partial<Product>) => void, onClose: () => void }) {
+function ProductModal({ product, categories, onSave, onClose }: { product: Product | null, categories: Category[], onSave: (p: Partial<Product>) => void, onClose: () => void }) {
   const [formData, setFormData] = useState({
     name: product?.name || '',
     description: product?.description || '',
@@ -337,10 +425,29 @@ function ProductModal({ product, onSave, onClose }: { product: Product | null, o
               onChange={e => setFormData({ ...formData, category: e.target.value })}
               className="w-full border rounded px-3 py-2"
             >
-              <option value="gas">Gas</option>
-              <option value="carbon">Carbón</option>
-              <option value="accesorios">Accesorios</option>
+              {categories.length > 0 ? categories.map((cat) => (
+                <option key={cat.slug} value={cat.slug}>{cat.name}</option>
+              )) : (
+                <>
+                  <option value="gas">Gas</option>
+                  <option value="carbon">Carbón</option>
+                  <option value="accesorios">Accesorios</option>
+                </>
+              )}
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              <ImageIcon className="w-4 h-4 inline mr-1" />
+              Imagen (URL)
+            </label>
+            <input
+              type="url"
+              value={formData.images[0] || ''}
+              onChange={e => setFormData({ ...formData, images: e.target.value ? [e.target.value] : [] })}
+              placeholder="https://ejemplo.com/imagen.jpg"
+              className="w-full border rounded px-3 py-2"
+            />
           </div>
           <div className="flex gap-4">
             <label className="flex items-center gap-2">

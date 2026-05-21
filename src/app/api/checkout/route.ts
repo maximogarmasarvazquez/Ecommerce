@@ -19,11 +19,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { customer_id, items, shipping_address } = body
-
-    if (!customer_id) {
-      return NextResponse.json({ error: 'customer_id requerido' }, { status: 400 })
-    }
+    const { items, shipping_address } = body
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'Carrito vacio' }, { status: 400 })
@@ -33,19 +29,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Direccion de envio incompleta' }, { status: 400 })
     }
 
-    // Verificar que el customer pertenece al usuario autenticado
-    const { data: customer } = await supabase
-      .from('customers')
-      .select('id')
-      .eq('id', customer_id)
-      .eq('user_id', user.id)
-      .single()
-
-    if (!customer) {
-      return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 403 })
-    }
-
-    // Validar que todos los productos existen, estan activos, y obtener precios reales
+    // Validacion previa de productos (mejora UX, la funcion DB tambien valida)
     const supabaseAdmin = createAdminClient()
     const productIds = items.map((item: { id: string }) => item.id)
 
@@ -64,7 +48,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Validar stock y calcular total REAL
+    // Validar stock y calcular total para shipping
     let totalAmount = 0
     const itemMap = new Map(items.map((i: { id: string; quantity: number }) => [i.id, i.quantity]))
 
@@ -79,7 +63,6 @@ export async function POST(request: Request) {
       totalAmount += product.price * qty
     }
 
-    // Calcular costo de envio server-side
     const shippingCost = calculateShippingCost(totalAmount)
 
     // Preparar items para la funcion create_order (solo id + quantity, sin precio)
@@ -88,9 +71,9 @@ export async function POST(request: Request) {
       quantity: item.quantity,
     }))
 
-    // Ejecutar create_order en una transaccion (via funcion DB)
-    const { data: orderResult, error: orderError } = await supabaseAdmin.rpc('create_order', {
-      p_customer_id: customer_id,
+    // Ejecutar create_order via RPC con la sesion del usuario autenticado
+    // La funcion usa auth.uid() para identificar al cliente
+    const { data: orderResult, error: orderError } = await supabase.rpc('create_order', {
       p_items: JSON.stringify(orderItems),
       p_shipping_address: shipping_address,
       p_shipping_cost: shippingCost,

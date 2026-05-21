@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useCart } from '@/hooks/use-cart'
-import { ShoppingCart, ArrowLeft, Star } from 'lucide-react'
+import { ShoppingCart, ArrowLeft, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 
@@ -22,22 +22,28 @@ export default function ProductDetailPage() {
   const params = useParams()
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [quantity, setQuantity] = useState(1)
   const { addItem } = useCart()
   const supabase = createClient()
 
   useEffect(() => {
     const fetchProduct = async () => {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('id', params.id)
-        .single()
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', params.id)
+          .single()
 
-      if (!error && data) {
+        if (error) throw error
         setProduct(data)
+      } catch (err) {
+        console.error('Error fetching product:', err)
+        setError('Error al cargar el producto')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
 
     if (params.id) {
@@ -68,12 +74,24 @@ export default function ProductDetailPage() {
     )
   }
 
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8 text-center">
+        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+        <p className="text-gray-500 mb-4">{error}</p>
+        <Link href="/products" className="text-orange-600 hover:underline">
+          Volver al catalogo
+        </Link>
+      </div>
+    )
+  }
+
   if (!product) {
     return (
       <div className="container mx-auto px-4 py-8 text-center">
         <p className="text-gray-500">Producto no encontrado</p>
         <Link href="/products" className="text-orange-600 hover:underline mt-4 inline-block">
-          Volver al catálogo
+          Volver al catalogo
         </Link>
       </div>
     )

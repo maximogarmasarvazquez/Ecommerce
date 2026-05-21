@@ -17,6 +17,15 @@ REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;
 
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+REVOKE ALL ON TABLES FROM PUBLIC;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+REVOKE ALL ON FUNCTIONS FROM PUBLIC;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+REVOKE ALL ON SEQUENCES FROM PUBLIC;
+
 -- ============================================
 -- 2. LIMPIAR TABLAS Y FUNCIONES
 -- ============================================
@@ -26,6 +35,7 @@ DROP TABLE IF EXISTS orders CASCADE;
 DROP TABLE IF EXISTS customers CASCADE;
 DROP TABLE IF EXISTS profiles CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
+DROP TABLE IF EXISTS categories CASCADE;
 
 DROP FUNCTION IF EXISTS is_admin CASCADE;
 DROP FUNCTION IF EXISTS is_owner(UUID) CASCADE;
@@ -57,7 +67,21 @@ CREATE TABLE profiles (
 );
 
 -- ============================================
--- 4. TABLA PRODUCTS
+-- 4. TABLA CATEGORIES
+-- ============================================
+
+CREATE TABLE categories (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    name TEXT NOT NULL UNIQUE,
+
+    slug TEXT NOT NULL UNIQUE,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================
+-- 5. TABLA PRODUCTS
 -- ============================================
 
 CREATE TABLE products (
@@ -70,7 +94,8 @@ CREATE TABLE products (
     price INTEGER NOT NULL
     CHECK (price >= 0),
 
-    category TEXT NOT NULL,
+    category TEXT NOT NULL
+        REFERENCES categories(slug),
 
     images TEXT[] DEFAULT ARRAY[]::TEXT[],
 
@@ -88,7 +113,7 @@ CREATE TABLE products (
 );
 
 -- ============================================
--- 5. TABLA CUSTOMERS
+-- 6. TABLA CUSTOMERS
 -- ============================================
 
 CREATE TABLE customers (
@@ -111,7 +136,7 @@ CREATE TABLE customers (
 );
 
 -- ============================================
--- 6. TABLA ORDERS
+-- 7. TABLA ORDERS
 -- ============================================
 
 CREATE TABLE orders (
@@ -140,7 +165,16 @@ CREATE TABLE orders (
 
     shipping_address JSONB DEFAULT '{}'::jsonb,
 
-    payment_status TEXT NOT NULL DEFAULT 'pending',
+    payment_status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (
+        payment_status IN (
+            'pending',
+            'approved',
+            'rejected',
+            'cancelled',
+            'refunded'
+        )
+    ),
 
     payment_id TEXT,
 
@@ -158,7 +192,7 @@ CREATE TABLE orders (
 );
 
 -- ============================================
--- 7. TABLA ORDER_ITEMS
+-- 8. TABLA ORDER_ITEMS
 -- ============================================
 
 CREATE TABLE order_items (
@@ -173,7 +207,10 @@ CREATE TABLE order_items (
         ON DELETE RESTRICT,
 
     quantity INTEGER NOT NULL
-    CHECK (quantity > 0),
+    CHECK (
+        quantity > 0
+        AND quantity <= 100
+    ),
 
     unit_price INTEGER NOT NULL
     CHECK (unit_price >= 0),
@@ -184,7 +221,7 @@ CREATE TABLE order_items (
 );
 
 -- ============================================
--- 8. INDEXES
+-- 9. INDEXES
 -- ============================================
 
 CREATE INDEX idx_profiles_role
@@ -199,6 +236,9 @@ ON products(is_active);
 CREATE INDEX idx_products_deleted
 ON products(deleted_at);
 
+CREATE INDEX idx_products_featured
+ON products(is_featured);
+
 CREATE INDEX idx_orders_customer_id
 ON orders(customer_id);
 
@@ -211,11 +251,16 @@ ON order_items(order_id);
 CREATE INDEX idx_customers_user_id
 ON customers(user_id);
 
-CREATE INDEX idx_products_featured
-ON products(is_featured);
+CREATE UNIQUE INDEX idx_orders_payment_id
+ON orders(payment_id)
+WHERE payment_id IS NOT NULL;
+
+CREATE UNIQUE INDEX idx_orders_external_reference
+ON orders(external_reference)
+WHERE external_reference IS NOT NULL;
 
 -- ============================================
--- 9. FUNCION updated_at
+-- 10. FUNCION updated_at
 -- ============================================
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -229,7 +274,7 @@ END;
 $$;
 
 -- ============================================
--- 10. TRIGGERS updated_at
+-- 11. TRIGGERS updated_at
 -- ============================================
 
 CREATE TRIGGER trigger_profiles_updated_at
@@ -253,7 +298,7 @@ FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================
--- 11. FUNCION ADMIN
+-- 12. FUNCION ADMIN
 -- ============================================
 
 CREATE OR REPLACE FUNCTION is_admin()
@@ -272,7 +317,7 @@ AS $$
 $$;
 
 -- ============================================
--- 12. FUNCION OWNER
+-- 13. FUNCION OWNER
 -- ============================================
 
 CREATE OR REPLACE FUNCTION is_owner(owner_id UUID)
@@ -286,7 +331,7 @@ AS $$
 $$;
 
 -- ============================================
--- 13. FUNCION CREAR PERFIL AUTOMATICO
+-- 14. FUNCION CREAR PERFIL AUTOMATICO
 -- ============================================
 
 CREATE OR REPLACE FUNCTION handle_new_user()
@@ -332,7 +377,7 @@ END;
 $$;
 
 -- ============================================
--- 14. TRIGGER NUEVOS USUARIOS
+-- 15. TRIGGER NUEVOS USUARIOS
 -- ============================================
 
 CREATE TRIGGER on_auth_user_created
@@ -341,7 +386,7 @@ FOR EACH ROW
 EXECUTE FUNCTION handle_new_user();
 
 -- ============================================
--- 15. CREATE ORDER SECURE FUNCTION
+-- 16. CREATE ORDER SECURE FUNCTION
 -- ============================================
 
 CREATE OR REPLACE FUNCTION create_order(
@@ -365,17 +410,13 @@ DECLARE
     v_inventory INTEGER;
 BEGIN
 
-    -- ============================================
     -- VALIDAR AUTH
-    -- ============================================
 
     IF auth.uid() IS NULL THEN
         RAISE EXCEPTION 'Usuario no autenticado';
     END IF;
 
-    -- ============================================
     -- VALIDAR CUSTOMER
-    -- ============================================
 
     SELECT id
     INTO v_customer_id
@@ -386,9 +427,7 @@ BEGIN
         RAISE EXCEPTION 'Cliente inexistente';
     END IF;
 
-    -- ============================================
     -- VALIDAR CARRITO
-    -- ============================================
 
     IF p_items IS NULL
     OR jsonb_array_length(p_items) = 0 THEN
@@ -399,9 +438,7 @@ BEGIN
         RAISE EXCEPTION 'Demasiados items';
     END IF;
 
-    -- ============================================
     -- VALIDAR SHIPPING
-    -- ============================================
 
     IF p_shipping_cost < 0 THEN
         RAISE EXCEPTION 'Shipping invalido';
@@ -414,9 +451,7 @@ BEGIN
         RAISE EXCEPTION 'Direccion incompleta';
     END IF;
 
-    -- ============================================
     -- CREAR ORDEN
-    -- ============================================
 
     INSERT INTO orders (
         customer_id,
@@ -434,9 +469,7 @@ BEGIN
     )
     RETURNING id INTO v_order_id;
 
-    -- ============================================
     -- PROCESAR ITEMS
-    -- ============================================
 
     FOR v_item IN
         SELECT *
@@ -446,13 +479,12 @@ BEGIN
         v_product_id := (v_item->>'product_id')::UUID;
         v_quantity := (v_item->>'quantity')::INTEGER;
 
-        IF v_quantity <= 0 THEN
+        IF v_quantity <= 0
+        OR v_quantity > 100 THEN
             RAISE EXCEPTION 'Cantidad invalida';
         END IF;
 
-        -- ============================================
         -- BLOQUEAR PRODUCTO
-        -- ============================================
 
         SELECT price, inventory
         INTO v_price, v_inventory
@@ -462,33 +494,25 @@ BEGIN
         AND deleted_at IS NULL
         FOR UPDATE;
 
-        -- ============================================
         -- VALIDAR PRODUCTO
-        -- ============================================
 
         IF v_price IS NULL THEN
             RAISE EXCEPTION 'Producto inexistente o inactivo';
         END IF;
 
-        -- ============================================
         -- VALIDAR INVENTARIO
-        -- ============================================
 
         IF v_inventory < v_quantity THEN
             RAISE EXCEPTION 'Inventario insuficiente';
         END IF;
 
-        -- ============================================
         -- DESCONTAR INVENTARIO
-        -- ============================================
 
         UPDATE products
         SET inventory = inventory - v_quantity
         WHERE id = v_product_id;
 
-        -- ============================================
         -- INSERTAR ITEM
-        -- ============================================
 
         INSERT INTO order_items (
             order_id,
@@ -507,17 +531,13 @@ BEGIN
 
     END LOOP;
 
-    -- ============================================
     -- ACTUALIZAR TOTAL
-    -- ============================================
 
     UPDATE orders
     SET total_amount = v_total + p_shipping_cost
     WHERE id = v_order_id;
 
-    -- ============================================
     -- RESPONSE
-    -- ============================================
 
     RETURN jsonb_build_object(
         'order_id', v_order_id,
@@ -529,12 +549,14 @@ END;
 $$;
 
 -- ============================================
--- 16. RESTAURAR INVENTARIO
+-- 17. RESTAURAR INVENTARIO
 -- ============================================
 
 CREATE OR REPLACE FUNCTION restore_inventory_on_cancel()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
     item RECORD;
@@ -564,7 +586,7 @@ END;
 $$;
 
 -- ============================================
--- 17. TRIGGER RESTAURAR INVENTARIO
+-- 18. TRIGGER RESTAURAR INVENTARIO
 -- ============================================
 
 CREATE TRIGGER trigger_restore_inventory
@@ -573,17 +595,44 @@ FOR EACH ROW
 EXECUTE FUNCTION restore_inventory_on_cancel();
 
 -- ============================================
--- 18. HABILITAR RLS
+-- 19. HABILITAR RLS
 -- ============================================
 
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
 
+ALTER TABLE categories FORCE ROW LEVEL SECURITY;
+ALTER TABLE profiles FORCE ROW LEVEL SECURITY;
+ALTER TABLE products FORCE ROW LEVEL SECURITY;
+ALTER TABLE customers FORCE ROW LEVEL SECURITY;
+ALTER TABLE orders FORCE ROW LEVEL SECURITY;
+ALTER TABLE order_items FORCE ROW LEVEL SECURITY;
+
 -- ============================================
--- 19. POLICIES PROFILES
+-- 20. POLICIES CATEGORIES
+-- ============================================
+
+CREATE POLICY "Public view categories"
+ON categories
+FOR SELECT
+USING (true);
+
+CREATE POLICY "Admins manage categories"
+ON categories
+FOR ALL
+USING (
+    is_admin()
+)
+WITH CHECK (
+    is_admin()
+);
+
+-- ============================================
+-- 21. POLICIES PROFILES
 -- ============================================
 
 CREATE POLICY "Users view own profile"
@@ -626,7 +675,7 @@ WITH CHECK (
 );
 
 -- ============================================
--- 20. POLICIES PRODUCTS
+-- 22. POLICIES PRODUCTS
 -- ============================================
 
 CREATE POLICY "Public view active products"
@@ -662,7 +711,7 @@ USING (
 );
 
 -- ============================================
--- 21. POLICIES CUSTOMERS
+-- 23. POLICIES CUSTOMERS
 -- ============================================
 
 CREATE POLICY "Users view own customer"
@@ -707,7 +756,7 @@ USING (
 );
 
 -- ============================================
--- 22. POLICIES ORDERS
+-- 24. POLICIES ORDERS
 -- ============================================
 
 CREATE POLICY "Users view own orders"
@@ -746,7 +795,7 @@ USING (
 );
 
 -- ============================================
--- 23. POLICIES ORDER_ITEMS
+-- 25. POLICIES ORDER_ITEMS
 -- ============================================
 
 CREATE POLICY "Users view own order items"
@@ -787,50 +836,67 @@ USING (
 );
 
 -- ============================================
--- 24. PERMISOS
+-- 26. PERMISOS
 -- ============================================
 
 GRANT USAGE ON SCHEMA public TO anon;
 GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT USAGE ON SCHEMA public TO service_role;
 
+-- CATEGORIES
+
+GRANT SELECT
+ON categories
+TO anon, authenticated;
+
 -- PRODUCTS
+
 GRANT SELECT
 ON products
 TO anon, authenticated;
 
 -- CUSTOMERS
+
 GRANT SELECT, UPDATE
 ON customers
 TO authenticated;
 
 -- ORDERS
+
 GRANT SELECT
 ON orders
 TO authenticated;
 
 -- ORDER ITEMS
+
 GRANT SELECT
 ON order_items
 TO authenticated;
 
 -- PROFILES
+
 GRANT SELECT, UPDATE
 ON profiles
 TO authenticated;
 
--- CREATE_ORDER FUNCTION
+-- CREATE ORDER FUNCTION
+
 GRANT EXECUTE
 ON FUNCTION create_order
 TO authenticated;
 
 -- SERVICE ROLE
+
 GRANT SELECT, INSERT, UPDATE, DELETE
 ON ALL TABLES IN SCHEMA public
 TO service_role;
 
+GRANT EXECUTE
+ON ALL FUNCTIONS IN SCHEMA public
+TO service_role;
+
 -- ============================================
--- 25. CREAR ADMIN
+-- 27. CREAR ADMIN
 -- ============================================
 
 -- UPDATE profiles

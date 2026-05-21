@@ -38,7 +38,7 @@ export default function RegisterPage() {
       options: {
         data: {
           full_name: fullName,
-          role: 'cliente'
+          role: 'customer'
         }
       }
     })
@@ -47,21 +47,7 @@ export default function RegisterPage() {
       setError(error.message)
       setLoading(false)
     } else {
-      // Auto-confirmar email
-      try {
-        const response = await fetch('/api/confirm-signup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
-        })
-        if (response.ok) {
-          router.push('/login?registered=true')
-        } else {
-          setSuccess(true)
-        }
-      } catch {
-        setSuccess(true)
-      }
+      setSuccess(true)
       setLoading(false)
     }
   }

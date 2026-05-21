@@ -1,8 +1,43 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { ChevronRight, Flame, Shield, Truck } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
 
-export default function Home() {
+async function getFeaturedProducts() {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('products')
+    .select('id, name, price, images, category')
+    .eq('is_featured', true)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(4)
+
+  return data || []
+}
+
+async function getCategories() {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('categories')
+    .select('name, slug')
+    .order('name')
+
+  return data || []
+}
+
+export default async function Home() {
+  const [featuredProducts, categories] = await Promise.all([
+    getFeaturedProducts(),
+    getCategories(),
+  ])
+
+  const categoryImages: Record<string, string> = {
+    gas: '/category-gas.jpg',
+    carbon: '/category-carbon.jpg',
+    accesorios: '/category-accessories.jpg',
+  }
+
   return (
     <div>
       {/* Hero Section */}
@@ -60,11 +95,7 @@ export default function Home() {
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold text-center mb-12">Nuestras Categorías</h2>
           <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { name: 'Parrillas de Gas', slug: 'gas', image: '/category-gas.jpg' },
-              { name: 'Parrillas de Carbón', slug: 'carbon', image: '/category-carbon.jpg' },
-              { name: 'Accesorios', slug: 'accesorios', image: '/category-accessories.jpg' },
-            ].map(cat => (
+            {categories.map(cat => (
               <Link
                 key={cat.slug}
                 href={`/products?category=${cat.slug}`}
@@ -84,23 +115,45 @@ export default function Home() {
       <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold text-center mb-12">Productos Destacados</h2>
-          <div className="grid md:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="border rounded-lg p-4 hover:shadow-lg transition-shadow">
-                <div className="bg-gray-200 h-48 rounded-lg mb-4" />
-                <h3 className="font-semibold mb-2">Parrilla Premium {i}</h3>
-                <p className="text-orange-600 font-bold">$XXX.XXX</p>
+          {featuredProducts.length > 0 ? (
+            <>
+              <div className="grid md:grid-cols-4 gap-6">
+                {featuredProducts.map(product => (
+                  <Link
+                    key={product.id}
+                    href={`/products/${product.id}`}
+                    className="border rounded-lg p-4 hover:shadow-lg transition-shadow group"
+                  >
+                    <div className="bg-gray-200 h-48 rounded-lg mb-4 overflow-hidden">
+                      {product.images?.[0] && (
+                        <Image
+                          src={product.images[0]}
+                          alt={product.name}
+                          width={400}
+                          height={300}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      )}
+                    </div>
+                    <h3 className="font-semibold mb-2">{product.name}</h3>
+                    <p className="text-orange-600 font-bold">
+                      ${(product.price / 100).toLocaleString('es-AR')}
+                    </p>
+                  </Link>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="text-center mt-8">
-            <Link
-              href="/products"
-              className="inline-block border-2 border-orange-600 text-orange-600 px-6 py-2 rounded-lg font-semibold hover:bg-orange-600 hover:text-white transition-colors"
-            >
-              Ver Todos los Productos
-            </Link>
-          </div>
+              <div className="text-center mt-8">
+                <Link
+                  href="/products"
+                  className="inline-block border-2 border-orange-600 text-orange-600 px-6 py-2 rounded-lg font-semibold hover:bg-orange-600 hover:text-white transition-colors"
+                >
+                  Ver Todos los Productos
+                </Link>
+              </div>
+            </>
+          ) : (
+            <p className="text-center text-gray-500">No hay productos destacados disponibles.</p>
+          )}
         </div>
       </section>
     </div>

@@ -1,10 +1,20 @@
 -- ============================================
 -- GRILLSTORE E-COMMERCE - DATOS INICIALES
--- Este archivo debe ejecutarse DESPUÉS de schema.sql
+-- Este archivo debe ejecutarse DESPUES de schema.sql
 -- ============================================
 
 -- ============================================
--- 1. PRODUCTOS DE EJEMPLO
+-- 1. CATEGORIAS
+-- ============================================
+
+INSERT INTO categories (name, slug)
+VALUES
+    ('Gas', 'gas'),
+    ('Carbon', 'carbon'),
+    ('Accesorios', 'accesorios');
+
+-- ============================================
+-- 2. PRODUCTOS DE EJEMPLO
 -- ============================================
 
 INSERT INTO products (
@@ -21,7 +31,7 @@ VALUES
 -- Parrillas de Gas
 (
     'Parrilla Weber Spirit E-320',
-    'Parrilla a gas de 3 quemadores, perfecta para familias. Incluye termómetro en tapa y mesas laterales plegables.',
+    'Parrilla a gas de 3 quemadores, perfecta para familias. Incluye termometro en tapa y mesas laterales plegables.',
     249990,
     'gas',
     ARRAY['https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=800'],
@@ -41,7 +51,7 @@ VALUES
 ),
 (
     'Parrilla Weber Q 1200',
-    'Parrilla portable a gas, ideal para espacios pequeños y camping. Compacta y funcional.',
+    'Parrilla portable a gas, ideal para espacios pequenos y camping. Compacta y funcional.',
     149990,
     'gas',
     ARRAY['https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=800'],
@@ -50,10 +60,10 @@ VALUES
     true
 ),
 
--- Parrillas de Carbón
+-- Parrillas de Carbon
 (
     'Parrilla Weber Original Kettle Premium',
-    'Parrilla de carbón clásica de 57cm. Tecnología One-Touch para control de aire.',
+    'Parrilla de carbon clasica de 57cm. Tecnologia One-Touch para control de aire.',
     89990,
     'carbon',
     ARRAY['https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800'],
@@ -61,6 +71,8 @@ VALUES
     true,
     true
 ),
+
+-- Accesorios
 (
     'Cepillo Limpiador de Acero Inoxidable',
     'Cepillo profesional para limpiar rejillas. Acero inoxidable duradero.',
@@ -73,9 +85,9 @@ VALUES
 );
 
 -- ============================================
--- 2. VERIFICACION
+-- 3. VERIFICACION
 -- ============================================
 
 SELECT
-    'Productos creados: ' || COUNT(*)::TEXT AS mensaje
+    'Categorias: ' || (SELECT COUNT(*)::TEXT FROM categories) || ', Productos: ' || COUNT(*)::TEXT AS mensaje
 FROM products;
