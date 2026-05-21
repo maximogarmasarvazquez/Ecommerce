@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useCart } from '@/hooks/use-cart'
+import { useState, useEffect } from 'react'
+import { useCart, type CartItem } from '@/hooks/use-cart'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -10,6 +10,29 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+  const [customerId, setCustomerId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const getCustomerId = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push('/login')
+        return
+      }
+
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('user_id', user.id)
+        .single()
+
+      if (customer) {
+        setCustomerId(customer.id)
+      }
+    }
+
+    getCustomerId()
+  }, [supabase, router])
 
   const [formData, setFormData] = useState({
     name: '',
@@ -25,90 +48,53 @@ export default function CheckoutPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  const createMercadoPagoPreference = async () => {
-    const preference = {
-      items: items.map(item => ({
-        title: item.name,
-        quantity: item.quantity,
-        unit_price: item.price / 100,
-        currency_id: 'ARS',
-      })),
-      payer: {
-        name: formData.name,
-        email: formData.email,
-      },
-      back_urls: {
-        success: `${window.location.origin}/checkout/success`,
-        failure: `${window.location.origin}/checkout`,
-        pending: `${window.location.origin}/checkout`,
-      },
-      external_reference: '',
-    }
-
-    const response = await fetch('/api/mercadopago/create-preference', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(preference),
-    })
-
-    const data = await response.json()
-    return data
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-
-      const orderData = {
-        customer_id: user?.id,
-        status: 'pending',
-        total_amount: total,
-        shipping_cost: 0,
-        shipping_address: {
-          name: formData.name,
-          address: formData.address,
-          city: formData.city,
-          province: formData.province,
-          postal_code: formData.postalCode,
-          phone: formData.phone,
-        },
+      if (!customerId) {
+        throw new Error('No se encontró el cliente')
       }
 
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert(orderData)
-        .select()
-        .single()
+      // Enviar SOLO ids y cantidades (los precios se toman de la DB)
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: customerId,
+          items: items.map((item: CartItem) => ({
+            id: item.id,
+            quantity: item.quantity,
+          })),
+          shipping_address: {
+            name: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            address: formData.address,
+            city: formData.city,
+            province: formData.province,
+            postal_code: formData.postalCode,
+          },
+        }),
+      })
 
-      if (orderError) throw orderError
+      const data = await response.json()
 
-      const orderItems = items.map(item => ({
-        order_id: order.id,
-        product_id: item.id,
-        quantity: item.quantity,
-        unit_price: item.price,
-      }))
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al procesar el pedido')
+      }
 
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems)
-
-      if (itemsError) throw itemsError
-
-      const mpData = await createMercadoPagoPreference()
-      
-      if (mpData.init_point) {
-        window.location.href = mpData.init_point
+      if (data.init_point) {
+        clearCart()
+        window.location.href = data.init_point
       } else {
         clearCart()
-        router.push(`/checkout/success?order_id=${order.id}`)
+        router.push(`/checkout/success?order_id=${data.order_id}`)
       }
     } catch (error) {
       console.error('Error:', error)
-      alert('Hubo un error al procesar el pedido')
+      alert(error instanceof Error ? error.message : 'Hubo un error al procesar el pedido')
       setLoading(false)
     }
   }

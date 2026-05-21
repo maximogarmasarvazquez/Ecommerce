@@ -1,211 +1,738 @@
 -- ============================================
--- CLEANUP: Reset database (run this to reset everything)
+-- GRILLSTORE E-COMMERCE - SCHEMA PRODUCTION
+-- Supabase + Seguridad + Roles + Inventario
 -- ============================================
 
--- Drop tables (use DO block to avoid errors if tables don't exist)
-DO $$ 
-BEGIN
-    DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-    DROP FUNCTION IF EXISTS public.handle_new_user();
-    DROP TABLE IF EXISTS order_items CASCADE;
-    DROP TABLE IF EXISTS orders CASCADE;
-    DROP TABLE IF EXISTS reviews CASCADE;
-    DROP TABLE IF EXISTS customers CASCADE;
-    DROP TABLE IF EXISTS products CASCADE;
-EXCEPTION WHEN undefined_table THEN NULL;
-END $$;
-
 -- ============================================
--- CREATE TABLES
+-- 1. EXTENSIONES
 -- ============================================
 
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Products table
-CREATE TABLE products (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT,
-    price INTEGER NOT NULL,
-    category TEXT NOT NULL,
-    images TEXT[] DEFAULT '{}',
-    inventory INTEGER DEFAULT 0,
-    is_featured BOOLEAN DEFAULT false,
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- ============================================
+-- 1b. REVOCAR PERMISOS PUBLICOS POR DEFECTO
+-- ============================================
 
--- Customers table
-CREATE TABLE customers (
-    id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;
+
+-- ============================================
+-- 2. LIMPIAR TABLAS Y FUNCIONES
+-- ============================================
+
+DROP TABLE IF EXISTS order_items CASCADE;
+DROP TABLE IF EXISTS orders CASCADE;
+DROP TABLE IF EXISTS customers CASCADE;
+DROP TABLE IF EXISTS profiles CASCADE;
+DROP TABLE IF EXISTS products CASCADE;
+
+DROP FUNCTION IF EXISTS is_admin CASCADE;
+DROP FUNCTION IF EXISTS is_owner(UUID) CASCADE;
+DROP FUNCTION IF EXISTS update_updated_at_column CASCADE;
+DROP FUNCTION IF EXISTS handle_new_user CASCADE;
+DROP FUNCTION IF EXISTS validate_inventory CASCADE;
+DROP FUNCTION IF EXISTS restore_inventory_on_cancel CASCADE;
+
+-- ============================================
+-- 3. TABLA PROFILES
+-- ============================================
+
+CREATE TABLE profiles (
+    id UUID PRIMARY KEY
+        REFERENCES auth.users(id)
+        ON DELETE CASCADE,
+
     full_name TEXT,
-    email TEXT,
+
+    email TEXT NOT NULL UNIQUE,
+
+    role TEXT NOT NULL DEFAULT 'customer'
+    CHECK (
+        role IN ('customer', 'admin')
+    ),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================
+-- 4. TABLA PRODUCTS
+-- ============================================
+
+CREATE TABLE products (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    name TEXT NOT NULL,
+
+    description TEXT,
+
+    price INTEGER NOT NULL
+    CHECK (price >= 0),
+
+    category TEXT NOT NULL,
+
+    images TEXT[] DEFAULT ARRAY[]::TEXT[],
+
+    inventory INTEGER NOT NULL DEFAULT 0
+    CHECK (inventory >= 0),
+
+    is_featured BOOLEAN NOT NULL DEFAULT false,
+
+    is_active BOOLEAN NOT NULL DEFAULT true,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================
+-- 5. TABLA CUSTOMERS
+-- ============================================
+
+CREATE TABLE customers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id UUID UNIQUE NOT NULL
+        REFERENCES auth.users(id)
+        ON DELETE CASCADE,
+
+    full_name TEXT,
+
+    email TEXT NOT NULL UNIQUE,
+
     phone TEXT,
-    shipping_address JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+
+    shipping_address JSONB DEFAULT '{}'::jsonb,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Orders table
+-- ============================================
+-- 6. TABLA ORDERS
+-- ============================================
+
 CREATE TABLE orders (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    total_amount INTEGER NOT NULL,
-    shipping_cost INTEGER DEFAULT 0,
-    shipping_address JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    customer_id UUID NOT NULL
+        REFERENCES customers(id)
+        ON DELETE RESTRICT,
+
+    status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (
+        status IN (
+            'pending',
+            'paid',
+            'shipped',
+            'delivered',
+            'cancelled'
+        )
+    ),
+
+    total_amount INTEGER NOT NULL
+    CHECK (total_amount >= 0),
+
+    shipping_cost INTEGER NOT NULL DEFAULT 0
+    CHECK (shipping_cost >= 0),
+
+    shipping_address JSONB DEFAULT '{}'::jsonb,
+
+    external_reference TEXT,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Order items table
+-- ============================================
+-- 7. TABLA ORDER_ITEMS
+-- ============================================
+
 CREATE TABLE order_items (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    order_id UUID REFERENCES orders(id) ON DELETE CASCADE NOT NULL,
-    product_id UUID REFERENCES products(id) ON DELETE SET NULL NOT NULL,
-    quantity INTEGER NOT NULL,
-    unit_price INTEGER NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
--- Reviews table
-CREATE TABLE reviews (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    product_id UUID REFERENCES products(id) ON DELETE CASCADE NOT NULL,
-    customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
-    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
-    comment TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    order_id UUID NOT NULL
+        REFERENCES orders(id)
+        ON DELETE CASCADE,
+
+    product_id UUID NOT NULL
+        REFERENCES products(id)
+        ON DELETE RESTRICT,
+
+    quantity INTEGER NOT NULL
+    CHECK (quantity > 0),
+
+    unit_price INTEGER NOT NULL
+    CHECK (unit_price >= 0),
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE(order_id, product_id)
 );
 
 -- ============================================
--- RLS POLICIES
+-- 8. INDEXES
 -- ============================================
 
+CREATE INDEX idx_profiles_role
+ON profiles(role);
+
+CREATE INDEX idx_products_category
+ON products(category);
+
+CREATE INDEX idx_products_active
+ON products(is_active);
+
+CREATE INDEX idx_orders_customer_id
+ON orders(customer_id);
+
+CREATE INDEX idx_order_items_order_id
+ON order_items(order_id);
+
+CREATE INDEX idx_customers_user_id
+ON customers(user_id);
+
+CREATE INDEX idx_orders_status
+ON orders(status);
+
+CREATE INDEX idx_products_featured
+ON products(is_featured);
+
+-- ============================================
+-- 9. FUNCION updated_at
+-- ============================================
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$;
+
+-- ============================================
+-- 10. TRIGGERS updated_at
+-- ============================================
+
+CREATE TRIGGER trigger_profiles_updated_at
+BEFORE UPDATE ON profiles
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_products_updated_at
+BEFORE UPDATE ON products
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_customers_updated_at
+BEFORE UPDATE ON customers
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_orders_updated_at
+BEFORE UPDATE ON orders
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- 11. FUNCION ADMIN
+-- ============================================
+
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER SET search_path = public
+STABLE
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM profiles
+        WHERE id = auth.uid()
+        AND role = 'admin'
+    );
+$$;
+
+-- ============================================
+-- 12. FUNCION OWNER
+-- ============================================
+
+CREATE OR REPLACE FUNCTION is_owner(owner_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER SET search_path = public
+STABLE
+AS $$
+    SELECT auth.uid() = owner_id;
+$$;
+
+-- ============================================
+-- 13. FUNCION CREAR PERFIL AUTOMATICO
+-- ============================================
+
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+
+    INSERT INTO public.profiles (
+        id,
+        email,
+        full_name,
+        role
+    )
+    VALUES (
+        NEW.id,
+        NEW.email,
+        COALESCE(
+            NEW.raw_user_meta_data->>'full_name',
+            ''
+        ),
+        'customer'
+    );
+
+    INSERT INTO public.customers (
+        user_id,
+        email,
+        full_name
+    )
+    VALUES (
+        NEW.id,
+        NEW.email,
+        COALESCE(
+            NEW.raw_user_meta_data->>'full_name',
+            ''
+        )
+    );
+
+    RETURN NEW;
+END;
+$$;
+
+-- ============================================
+-- 14. TRIGGER NUEVOS USUARIOS
+-- ============================================
+
+CREATE TRIGGER on_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW
+EXECUTE FUNCTION handle_new_user();
+
+-- ============================================
+-- 15. CREAR ORDEN (SERVER-SIDE TRANSACTION)
+-- ============================================
+
+CREATE OR REPLACE FUNCTION create_order(
+    p_customer_id UUID,
+    p_items JSONB,
+    p_shipping_address JSONB,
+    p_shipping_cost INTEGER DEFAULT 0
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+    v_order_id UUID;
+    v_total INTEGER := 0;
+    v_item JSONB;
+    v_product_id UUID;
+    v_quantity INTEGER;
+    v_price INTEGER;
+    v_inventory INTEGER;
+BEGIN
+    -- Validar carrito no vacio
+    IF p_items IS NULL OR jsonb_array_length(p_items) = 0 THEN
+        RAISE EXCEPTION 'Carrito vacio';
+    END IF;
+
+    -- Validar direccion de envio
+    IF p_shipping_address IS NULL
+       OR p_shipping_address->>'name' IS NULL
+       OR p_shipping_address->>'address' IS NULL
+       OR p_shipping_address->>'city' IS NULL THEN
+        RAISE EXCEPTION 'Direccion de envio incompleta';
+    END IF;
+
+    -- Crear orden
+    INSERT INTO orders (
+        customer_id,
+        status,
+        total_amount,
+        shipping_cost,
+        shipping_address
+    ) VALUES (
+        p_customer_id,
+        'pending',
+        0,
+        p_shipping_cost,
+        p_shipping_address
+    )
+    RETURNING id INTO v_order_id;
+
+    -- Procesar cada item del carrito
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    LOOP
+        v_product_id := (v_item->>'product_id')::UUID;
+        v_quantity := (v_item->>'quantity')::INTEGER;
+
+        IF v_quantity <= 0 THEN
+            RAISE EXCEPTION 'Cantidad invalida para producto %', v_product_id;
+        END IF;
+
+        -- Bloquear producto y obtener datos reales de DB
+        SELECT price, inventory
+        INTO v_price, v_inventory
+        FROM products
+        WHERE id = v_product_id
+        FOR UPDATE;
+
+        -- Validar que el producto exista
+        IF v_price IS NULL THEN
+            RAISE EXCEPTION 'Producto % inexistente', v_product_id;
+        END IF;
+
+        -- Validar inventario suficiente
+        IF v_inventory < v_quantity THEN
+            RAISE EXCEPTION 'Inventario insuficiente para producto %', v_product_id;
+        END IF;
+
+        -- Descontar inventario
+        UPDATE products
+        SET inventory = inventory - v_quantity
+        WHERE id = v_product_id;
+
+        -- Insertar item con precio REAL (no el enviado por frontend)
+        INSERT INTO order_items (
+            order_id,
+            product_id,
+            quantity,
+            unit_price
+        ) VALUES (
+            v_order_id,
+            v_product_id,
+            v_quantity,
+            v_price
+        );
+
+        v_total := v_total + (v_price * v_quantity);
+    END LOOP;
+
+    -- Actualizar total de la orden (calculado server-side)
+    UPDATE orders
+    SET total_amount = v_total + p_shipping_cost
+    WHERE id = v_order_id;
+
+    RETURN jsonb_build_object(
+        'order_id', v_order_id,
+        'total_amount', v_total + p_shipping_cost
+    );
+END;
+$$;
+
+-- ============================================
+-- 16. RESTAURAR INVENTARIO
+-- ============================================
+
+CREATE OR REPLACE FUNCTION restore_inventory_on_cancel()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    item RECORD;
+BEGIN
+    IF OLD.status != 'cancelled'
+    AND NEW.status = 'cancelled' THEN
+        FOR item IN
+            SELECT product_id, quantity
+            FROM order_items
+            WHERE order_id = NEW.id
+        LOOP
+            UPDATE products
+            SET inventory = inventory + item.quantity
+            WHERE id = item.product_id;
+        END LOOP;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- ============================================
+-- 17. TRIGGER RESTAURAR INVENTARIO
+-- ============================================
+
+CREATE TRIGGER trigger_restore_inventory
+BEFORE UPDATE ON orders
+FOR EACH ROW
+EXECUTE FUNCTION restore_inventory_on_cancel();
+
+-- ============================================
+-- 18. HABILITAR RLS
+-- ============================================
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
-
--- Products: anyone can read (active and inactive for admin, only active for public)
-CREATE POLICY "Products are viewable by everyone" ON products
-    FOR SELECT USING (
-        is_active = true 
-        OR exists (select 1 from auth.users where id = auth.uid() and raw_user_meta_data->>'role' = 'admin')
-    );
-
--- Products: admin can manage
-CREATE POLICY "Admin can manage products" ON products
-    FOR ALL USING (
-        EXISTS (
-            SELECT 1 FROM auth.users
-            WHERE id = auth.uid()
-            AND raw_user_meta_data->>'role' = 'admin'
-        )
-    );
-
--- Customers: users can read/update own profile
-CREATE POLICY "Users can view own profile" ON customers
-    FOR SELECT USING (id = auth.uid());
-
-CREATE POLICY "Users can update own profile" ON customers
-    FOR UPDATE USING (id = auth.uid());
-
--- Auto-create customer on signup
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-    INSERT INTO public.customers (id, full_name, email)
-    VALUES (new.id, new.raw_user_meta_data->>'full_name', new.email);
-    RETURN new;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-    AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
-
--- Orders: users can read own orders
-CREATE POLICY "Users can view own orders" ON orders
-    FOR SELECT USING (customer_id = auth.uid());
-
--- Order items: users can read own order items
-CREATE POLICY "Users can view own order items" ON order_items
-    FOR SELECT USING (
-        order_id IN (
-            SELECT id FROM orders WHERE customer_id = auth.uid()
-        )
-    );
-
--- Reviews: anyone can read, authenticated users can create
-CREATE POLICY "Reviews are viewable by everyone" ON reviews
-    FOR SELECT USING (true);
-
-CREATE POLICY "Authenticated users can create reviews" ON reviews
-    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 -- ============================================
--- INDEXES
+-- 19. POLICIES PROFILES
 -- ============================================
 
-CREATE INDEX idx_products_category ON products(category);
-CREATE INDEX idx_products_is_featured ON products(is_featured);
-CREATE INDEX idx_orders_customer_id ON orders(customer_id);
-CREATE INDEX idx_order_items_order_id ON order_items(order_id);
-CREATE INDEX idx_reviews_product_id ON reviews(product_id);
+CREATE POLICY "Users view own profile"
+ON profiles
+FOR SELECT
+USING (
+    is_owner(id)
+);
+
+CREATE POLICY "Users update own profile"
+ON profiles
+FOR UPDATE
+USING (
+    is_owner(id)
+)
+WITH CHECK (
+    is_owner(id)
+    AND role = (
+        SELECT role
+        FROM profiles
+        WHERE id = auth.uid()
+    )
+);
+
+CREATE POLICY "Admins select profiles"
+ON profiles
+FOR SELECT
+USING (
+    is_admin()
+);
+
+CREATE POLICY "Admins update profiles"
+ON profiles
+FOR UPDATE
+USING (
+    is_admin()
+)
+WITH CHECK (
+    is_admin()
+);
 
 -- ============================================
--- STORAGE
+-- 20. POLICIES PRODUCTS
 -- ============================================
 
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('product-images', 'product-images', true)
-ON CONFLICT (id) DO NOTHING;
+CREATE POLICY "Public view active products"
+ON products
+FOR SELECT
+USING (
+    is_active = true
+);
 
-DROP POLICY IF EXISTS "Public access to product images" ON storage.objects;
-CREATE POLICY "Public access to product images"
-    ON storage.objects FOR SELECT USING (bucket_id = 'product-images');
+CREATE POLICY "Admins insert products"
+ON products
+FOR INSERT
+WITH CHECK (
+    is_admin()
+);
 
-DROP POLICY IF EXISTS "Authenticated users can upload product images" ON storage.objects;
-CREATE POLICY "Authenticated users can upload product images"
-    ON storage.objects FOR INSERT WITH CHECK (
-        bucket_id = 'product-images'
-        AND auth.role() IN ('authenticated', 'service_role')
-    );
+CREATE POLICY "Admins update products"
+ON products
+FOR UPDATE
+USING (
+    is_admin()
+)
+WITH CHECK (
+    is_admin()
+);
 
-DROP POLICY IF EXISTS "Admin can delete product images" ON storage.objects;
-CREATE POLICY "Admin can delete product images"
-    ON storage.objects FOR DELETE USING (
-        bucket_id = 'product-images'
-        AND EXISTS (
-            SELECT 1 FROM auth.users
-            WHERE id = auth.uid()
-            AND raw_user_meta_data->>'role' = 'admin'
-        )
-    );
-
--- ============================================
--- SAMPLE PRODUCTS
--- ============================================
-
-INSERT INTO products (name, description, price, category, images, inventory, is_featured, is_active) VALUES
-('Parrilla Weber Spirit E-320', 'Parrilla a gas de 3 quemadores, perfecta para familias. Incluye termómetro en tapa.', 249990, 'gas', ARRAY['https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=800'], 15, true, true),
-('Parrilla Char-Broil Performance', 'Parrilla de gas con 4 quemadores, acero inoxidable de alta calidad.', 189990, 'gas', ARRAY['https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=800'], 10, true, true),
-('Parrilla Weber Q 1200', 'Parrilla portable a gas, ideal para espacios pequeños y camping.', 149990, 'gas', ARRAY['https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=800'], 20, false, true),
-('Parrilla Weber Original Kettle Premium', 'Parrilla de carbón clásica de 57cm con tecnología One-Touch.', 89990, 'carbon', ARRAY['https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800'], 25, true, true),
-('Parrilla Kamado Joe Classic II', 'Parrilla estilo kamado de cerámica, excelente retención de calor.', 349990, 'carbon', ARRAY['https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800'], 5, true, true),
-('Parrilla Blackstone 36 inch', 'Parrilla de carbón con superficie extragrande, perfecta para reuniones.', 129990, 'carbon', ARRAY['https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=800'], 12, false, true),
-('Set de Utensilios Weber 6 piezas', 'Set completo de utensilios de acero inoxidable.', 24990, 'accesorios', ARRAY['https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=800'], 50, false, true),
-('Termómetro Digital Weber', 'Termómetro de lectura rápida para cocción perfecta.', 12990, 'accesorios', ARRAY['https://images.unsplash.com/photo-1604470591969-45a3e2f594a4?w=800'], 30, false, true),
-('Funda para Parrilla Weber', 'Funda resistente al agua y UV.', 19990, 'accesorios', ARRAY['https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800'], 40, false, true),
-('Kit de Inicio Carbón Weber', 'Incluye bolsa de carbón y encendedor.', 8990, 'accesorios', ARRAY['https://images.unsplash.com/photo-1523309996740-d5315f9cc28b?w=800'], 100, false, true),
-('Guantes de Cocción Residentes', 'Guantes de Aramida resistencia hasta 500°C.', 14990, 'accesorios', ARRAY['https://images.unsplash.com/photo-1585675397312-9e5e7c4c73a4?w=800'], 35, false, true),
-('Cepillo Limpiador de Acero', 'Cepillo profesional para limpiar rejillas.', 4990, 'accesorios', ARRAY['https://images.unsplash.com/photo-1585421514284-efb74c2b69ba?w=800'], 60, false, true);
+CREATE POLICY "Admins delete products"
+ON products
+FOR DELETE
+USING (
+    is_admin()
+);
 
 -- ============================================
--- MAKE USER ADMIN
+-- 21. POLICIES CUSTOMERS
 -- ============================================
+
+CREATE POLICY "Users view own customer"
+ON customers
+FOR SELECT
+USING (
+    is_owner(user_id)
+);
+
+CREATE POLICY "Users update own customer"
+ON customers
+FOR UPDATE
+USING (
+    is_owner(user_id)
+)
+WITH CHECK (
+    is_owner(user_id)
+);
+
+CREATE POLICY "Admins select customers"
+ON customers
+FOR SELECT
+USING (
+    is_admin()
+);
+
+CREATE POLICY "Admins update customers"
+ON customers
+FOR UPDATE
+USING (
+    is_admin()
+)
+WITH CHECK (
+    is_admin()
+);
+
+CREATE POLICY "Admins delete customers"
+ON customers
+FOR DELETE
+USING (
+    is_admin()
+);
+
+-- ============================================
+-- 22. POLICIES ORDERS
+-- ============================================
+
+CREATE POLICY "Users view own orders"
+ON orders
+FOR SELECT
+USING (
+    customer_id IN (
+        SELECT id
+        FROM customers
+        WHERE user_id = auth.uid()
+    )
+);
+
+-- Los inserts de orders SOLO se hacen via create_order() function (server-side)
+-- Policy de INSERT eliminada por seguridad
+
+CREATE POLICY "Admins select orders"
+ON orders
+FOR SELECT
+USING (
+    is_admin()
+);
+
+CREATE POLICY "Admins update orders"
+ON orders
+FOR UPDATE
+USING (
+    is_admin()
+)
+WITH CHECK (
+    is_admin()
+);
+
+CREATE POLICY "Admins delete orders"
+ON orders
+FOR DELETE
+USING (
+    is_admin()
+);
+
+-- ============================================
+-- 23. POLICIES ORDER_ITEMS
+-- ============================================
+
+CREATE POLICY "Users view own order items"
+ON order_items
+FOR SELECT
+USING (
+    order_id IN (
+        SELECT o.id
+        FROM orders o
+        JOIN customers c
+        ON c.id = o.customer_id
+        WHERE c.user_id = auth.uid()
+    )
+);
+
+-- Los inserts de order_items SOLO se via create_order() function (server-side)
+-- Policy de INSERT eliminada por seguridad
+
+CREATE POLICY "Admins select order items"
+ON order_items
+FOR SELECT
+USING (
+    is_admin()
+);
+
+CREATE POLICY "Admins update order items"
+ON order_items
+FOR UPDATE
+USING (
+    is_admin()
+)
+WITH CHECK (
+    is_admin()
+);
+
+CREATE POLICY "Admins delete order items"
+ON order_items
+FOR DELETE
+USING (
+    is_admin()
+);
+
+-- ============================================
+-- 24. PERMISOS
+-- ============================================
+
+GRANT USAGE ON SCHEMA public TO anon;
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT USAGE ON SCHEMA public TO service_role;
+
+-- PRODUCTS
+GRANT SELECT
+ON products
+TO anon, authenticated;
+
+-- CUSTOMERS
+GRANT SELECT, UPDATE
+ON customers
+TO authenticated;
+
+-- ORDERS: SOLO SELECT via RLS, INSERT via create_order()
+GRANT SELECT
+ON orders
+TO authenticated;
+
+-- ORDER ITEMS: SOLO SELECT via RLS, INSERT via create_order()
+GRANT SELECT
+ON order_items
+TO authenticated;
+
+-- PROFILES
+GRANT SELECT, UPDATE
+ON profiles
+TO authenticated;
+
+-- FUNCTION CREATE_ORDER
+GRANT EXECUTE ON FUNCTION create_order TO authenticated;
+
+-- SERVICE ROLE
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON ALL TABLES IN SCHEMA public
+TO service_role;
+
+-- ============================================
+-- 25. CREAR ADMIN
+-- ============================================
+
+-- UPDATE profiles
+-- SET role = 'admin'
+-- WHERE email = 'tu-email@ejemplo.com';

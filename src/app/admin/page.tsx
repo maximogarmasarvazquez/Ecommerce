@@ -52,8 +52,13 @@ export default function AdminPage() {
 
     setUser(user)
     
-    const userRole = user.user_metadata?.role
-    if (userRole !== 'admin') {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    
+    if (profile?.role !== 'admin') {
       router.push('/')
       return
     }

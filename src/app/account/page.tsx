@@ -4,13 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Package, LogOut } from 'lucide-react'
-
-interface Order {
-  id: string
-  status: string
-  total_amount: number
-  created_at: string
-}
+import type { Order } from '@/lib/supabase/types'
 
 export default function AccountPage() {
   const [user, setUser] = useState<any>(null)
@@ -30,14 +24,22 @@ export default function AccountPage() {
 
       setUser(user)
 
-      const { data: ordersData } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('customer_id', user.id)
-        .order('created_at', { ascending: false })
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('user_id', user.id)
+        .single()
 
-      if (ordersData) {
-        setOrders(ordersData)
+      if (customer) {
+        const { data: ordersData, error: ordersError } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('customer_id', customer.id)
+          .order('created_at', { ascending: false })
+
+        if (!ordersError && ordersData) {
+          setOrders(ordersData)
+        }
       }
 
       setLoading(false)

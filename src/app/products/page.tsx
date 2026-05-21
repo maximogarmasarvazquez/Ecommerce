@@ -44,6 +44,12 @@ export default function ProductsPage() {
 
       const { data, error } = await query
 
+      console.log('Products response:', { data, error })
+      
+      if (error) {
+        console.error('Error fetching products:', error)
+      }
+      
       if (!error && data) {
         let filtered = data
         if (search) {

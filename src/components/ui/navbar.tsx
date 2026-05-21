@@ -15,38 +15,46 @@ export function Navbar() {
   useEffect(() => {
     const checkAdmin = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (user?.user_metadata?.role === 'admin') {
-        setIsAdmin(true)
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+        
+        if (profile?.role === 'admin') {
+          setIsAdmin(true)
+        }
       }
     }
     checkAdmin()
   }, [supabase])
 
   return (
-    <nav className="bg-white shadow-sm border-b">
+    <nav className="bg-white shadow-sm border-b" style={{ backgroundColor: '#ffffff' }}>
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="text-xl font-bold text-gray-900">
+          <Link href="/" className="text-xl font-bold" style={{ color: '#000000' }}>
             Parrillas Store
           </Link>
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-8">
-            <Link href="/products" className="text-gray-600 hover:text-gray-900">
+            <Link href="/products" className="font-semibold" style={{ color: '#000000' }}>
               Productos
             </Link>
-            <Link href="/products?category=gas" className="text-gray-600 hover:text-gray-900">
+            <Link href="/products?category=gas" className="font-semibold" style={{ color: '#000000' }}>
               Gas
             </Link>
-            <Link href="/products?category=carbon" className="text-gray-600 hover:text-gray-900">
+            <Link href="/products?category=carbon" className="font-semibold" style={{ color: '#000000' }}>
               Carbón
             </Link>
-            <Link href="/products?category=accesorios" className="text-gray-600 hover:text-gray-900">
+            <Link href="/products?category=accesorios" className="font-semibold" style={{ color: '#000000' }}>
               Accesorios
             </Link>
             {isAdmin && (
-              <Link href="/admin" className="text-orange-600 hover:text-orange-700 font-medium">
+              <Link href="/admin" className="font-bold" style={{ color: '#ea580c' }}>
                 Admin
               </Link>
             )}
@@ -54,7 +62,7 @@ export function Navbar() {
 
           {/* Actions */}
           <div className="flex items-center gap-4">
-            <Link href="/cart" className="relative p-2 text-gray-600 hover:text-gray-900">
+            <Link href="/cart" className="relative p-2" style={{ color: '#000000' }}>
               <ShoppingCart className="w-6 h-6" />
               {itemCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-orange-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
@@ -62,13 +70,14 @@ export function Navbar() {
                 </span>
               )}
             </Link>
-            <Link href="/account" className="p-2 text-gray-600 hover:text-gray-900">
+            <Link href="/account" className="p-2" style={{ color: '#000000' }}>
               <User className="w-6 h-6" />
             </Link>
 
             {/* Mobile menu button */}
             <button
-              className="md:hidden p-2 text-gray-600"
+              className="md:hidden p-2"
+              style={{ color: '#000000' }}
               onClick={() => setMenuOpen(!menuOpen)}
             >
               <Menu className="w-6 h-6" />
@@ -80,20 +89,20 @@ export function Navbar() {
         {menuOpen && (
           <div className="md:hidden py-4 border-t">
             <div className="flex flex-col gap-4">
-              <Link href="/products" className="text-gray-600">
+              <Link href="/products" className="font-semibold" style={{ color: '#000000' }}>
                 Productos
               </Link>
-              <Link href="/products?category=gas" className="text-gray-600">
+              <Link href="/products?category=gas" className="font-semibold" style={{ color: '#000000' }}>
                 Gas
               </Link>
-              <Link href="/products?category=carbon" className="text-gray-600">
+              <Link href="/products?category=carbon" className="font-semibold" style={{ color: '#000000' }}>
                 Carbón
               </Link>
-              <Link href="/products?category=accesorios" className="text-gray-600">
+              <Link href="/products?category=accesorios" className="font-semibold" style={{ color: '#000000' }}>
                 Accesorios
               </Link>
               {isAdmin && (
-                <Link href="/admin" className="text-orange-600 font-medium">
+                <Link href="/admin" className="font-bold" style={{ color: '#ea580c' }}>
                   Admin
                 </Link>
               )}

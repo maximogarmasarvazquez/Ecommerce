@@ -6,17 +6,8 @@ export default function Home() {
   return (
     <div>
       {/* Hero Section */}
-      <section className="relative bg-gray-900 text-white py-20 md:py-32">
-        <div className="absolute inset-0 overflow-hidden">
-          <Image
-            src="/hero-grill.jpg"
-            alt="Parrilla"
-            fill
-            className="object-cover opacity-30"
-            priority
-          />
-        </div>
-        <div className="relative container mx-auto px-4 text-center">
+      <section className="relative bg-gradient-to-r from-gray-900 to-gray-800 text-white py-20 md:py-32">
+        <div className="container mx-auto px-4 text-center">
           <h1 className="text-4xl md:text-6xl font-bold mb-6">
             Las Mejores Parrillas del Mercado
           </h1>
