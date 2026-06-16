@@ -511,6 +511,10 @@ ON profiles FOR UPDATE
 USING (is_admin()) 
 WITH CHECK (is_admin());
 
+CREATE POLICY "Users insert own profile" 
+ON profiles FOR INSERT 
+WITH CHECK (id = auth.uid());
+
 -- ============================================
 -- 21b. PROTECCIÓN ESTRICTA DE ROLES VIA TRIGGER
 -- ============================================
@@ -591,7 +595,7 @@ GRANT SELECT ON orders TO authenticated;
 GRANT SELECT ON order_items TO authenticated;
 
 -- PROFILES
-GRANT SELECT, UPDATE ON profiles TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON profiles TO authenticated;
 
 -- CREATE ORDER FUNCTION
 GRANT EXECUTE ON FUNCTION create_order TO authenticated;

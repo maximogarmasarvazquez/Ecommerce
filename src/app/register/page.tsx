@@ -23,16 +23,23 @@ export default function RegisterPage() {
     setResending(true)
     setResendMsg('')
     try {
-      const res = await fetch('/api/resend-confirmation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
       })
-      const data = await res.json()
-      if (res.ok) {
-        setResendMsg('Email reenviado. Revisá tu casilla.')
+      if (error) {
+        if (error.message?.includes('rate_limit')) {
+          setResendMsg('Esperá un momento antes de pedir otro reenvío.')
+        } else if (error.message?.includes('already_confirmed') || error.message?.includes('Email link request')) {
+          setResendMsg('Tu cuenta ya fue confirmada. Iniciá sesión.')
+        } else {
+          setResendMsg(error.message || 'Error al reenviar')
+        }
       } else {
-        setResendMsg(data.error || 'Error al reenviar')
+        setResendMsg('Email reenviado. Revisá tu casilla (incluí spam).')
       }
     } catch {
       setResendMsg('Error de conexión')
@@ -57,7 +64,7 @@ export default function RegisterPage() {
 
     setLoading(true)
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -72,10 +79,27 @@ export default function RegisterPage() {
     if (error) {
       setError(error.message)
       setLoading(false)
-    } else {
-      setSuccess(true)
-      setLoading(false)
+      return
     }
+
+    if (data.user) {
+      try {
+        await fetch('/api/create-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: data.user.id,
+            email: data.user.email,
+            full_name: fullName,
+          }),
+        })
+      } catch (e) {
+        console.warn('Profile creation fallback failed:', e)
+      }
+    }
+
+    setSuccess(true)
+    setLoading(false)
   }
 
   if (success) {
