@@ -52,52 +52,59 @@ export default function AccountPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
 
-      if (!user) {
-        router.push('/login')
-        return
-      }
-
-      setUser(user)
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-
-      if (profile) {
-        setProfile(profile)
-        const addr = (profile.shipping_address || {}) as Record<string, string>
-        setProfileForm({
-          full_name: profile.full_name || '',
-          phone: profile.phone || '',
-          address: addr.address || '',
-          city: addr.city || '',
-          province: addr.province || '',
-          postal_code: addr.postal_code || '',
-        })
-
-        const { data: ordersData } = await supabase
-          .from('orders')
-          .select(`
-            *,
-            order_items (
-              quantity,
-              unit_price,
-              product:products (name)
-            )
-          `)
-          .eq('customer_id', profile.id)
-          .order('created_at', { ascending: false })
-
-        if (ordersData) {
-          setOrders(ordersData as OrderWithItems[])
+        if (!user) {
+          router.push('/login')
+          return
         }
-      }
 
-      setLoading(false)
+        setUser(user)
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single()
+
+        if (profile) {
+          setProfile(profile)
+          const addr = (profile.shipping_address || {}) as Record<string, string>
+          setProfileForm({
+            full_name: profile.full_name || '',
+            phone: profile.phone || '',
+            address: addr.address || '',
+            city: addr.city || '',
+            province: addr.province || '',
+            postal_code: addr.postal_code || '',
+          })
+
+          const { data: ordersData } = await supabase
+            .from('orders')
+            .select(`
+              *,
+              order_items (
+                quantity,
+                unit_price,
+                product:products (name)
+              )
+            `)
+            .eq('customer_id', profile.id)
+            .order('created_at', { ascending: false })
+
+          if (ordersData) {
+            setOrders(ordersData as OrderWithItems[])
+          }
+        } else {
+          setError('No se encontró tu perfil. Intestá cerrar sesión y volver a iniciarla.')
+        }
+      } catch (err) {
+        console.error('Error fetching account data:', err)
+        setError('Error al cargar los datos')
+      } finally {
+        setLoading(false)
+      }
     }
 
     fetchData()

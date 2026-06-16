@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Leaf } from 'lucide-react'
@@ -13,6 +13,16 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const router = useRouter()
   const supabase = createClient()
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const err = params.get('error')
+    if (err === 'link_expirado') {
+      setError('El link de confirmación expiró. Iniciá sesión para recibir uno nuevo.')
+    } else if (err === 'email_no_confirmado') {
+      setError('Email no confirmado. Revisá tu casilla o solicitá un nuevo link.')
+    }
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
