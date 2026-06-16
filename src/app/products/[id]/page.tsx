@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useCart } from '@/hooks/use-cart'
-import { ShoppingCart, ArrowLeft, AlertCircle } from 'lucide-react'
+import { ShoppingCart, ArrowLeft, AlertCircle, Package } from 'lucide-react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 
@@ -79,8 +79,8 @@ export default function ProductDetailPage() {
       <div className="container mx-auto px-4 py-8 text-center">
         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
         <p className="text-gray-500 mb-4">{error}</p>
-        <Link href="/products" className="text-orange-600 hover:underline">
-          Volver al catalogo
+        <Link href="/products" className="text-emerald-700 hover:underline">
+          Volver al catálogo
         </Link>
       </div>
     )
@@ -89,8 +89,8 @@ export default function ProductDetailPage() {
   if (!product) {
     return (
       <div className="container mx-auto px-4 py-8 text-center">
-        <p className="text-gray-500">Producto no encontrado</p>
-        <Link href="/products" className="text-orange-600 hover:underline mt-4 inline-block">
+        <p className="text-stone-400">Producto no encontrado</p>
+        <Link href="/products" className="text-emerald-700 hover:underline mt-4 inline-block">
           Volver al catalogo
         </Link>
       </div>
@@ -99,7 +99,7 @@ export default function ProductDetailPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <Link href="/products" className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6">
+      <Link href="/products" className="inline-flex items-center text-stone-600 hover:text-emerald-700 mb-6">
         <ArrowLeft className="w-4 h-4 mr-2" />
         Volver al catálogo
       </Link>
@@ -117,28 +117,28 @@ export default function ProductDetailPage() {
 
         {/* Details */}
         <div>
-          <span className="text-sm text-gray-500 uppercase">{product.category}</span>
-          <h1 className="text-3xl font-bold mb-4">{product.name}</h1>
-          <p className="text-orange-600 text-3xl font-bold mb-6">
+          <span className="text-sm text-emerald-600 uppercase font-medium">{product.category}</span>
+          <h1 className="text-3xl font-bold mb-4 text-emerald-900">{product.name}</h1>
+          <p className="text-emerald-700 text-3xl font-bold mb-6">
             ${(product.price / 100).toLocaleString('es-AR')}
           </p>
 
-          <p className="text-gray-600 mb-6">{product.description}</p>
+          <p className="text-stone-600 mb-6">{product.description}</p>
 
           {/* Quantity */}
           <div className="flex items-center gap-4 mb-6">
-            <span className="text-gray-700">Cantidad:</span>
-            <div className="flex items-center border rounded-lg">
+            <span className="text-stone-700">Cantidad:</span>
+            <div className="flex items-center border border-stone-300 rounded-lg">
               <button
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                className="px-4 py-2 hover:bg-gray-100"
+                className="px-4 py-2 hover:bg-stone-100 text-stone-700"
               >
                 -
               </button>
-              <span className="px-4 py-2">{quantity}</span>
+              <span className="px-4 py-2 text-stone-900">{quantity}</span>
               <button
                 onClick={() => setQuantity(Math.min(product.inventory, quantity + 1))}
-                className="px-4 py-2 hover:bg-gray-100"
+                className="px-4 py-2 hover:bg-stone-100 text-stone-700"
               >
                 +
               </button>
@@ -146,7 +146,7 @@ export default function ProductDetailPage() {
           </div>
 
           {/* Stock */}
-          <p className="text-sm text-gray-500 mb-6">
+          <p className="text-sm text-stone-500 mb-6">
             {product.inventory > 0
               ? `${product.inventory} unidades disponibles`
               : 'Sin stock'}
@@ -156,7 +156,7 @@ export default function ProductDetailPage() {
           <button
             onClick={handleAddToCart}
             disabled={product.inventory === 0}
-            className="w-full bg-orange-600 text-white py-3 rounded-lg font-semibold hover:bg-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-emerald-700 text-white py-3 rounded-lg font-semibold hover:bg-emerald-600 disabled:bg-stone-300 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
           >
             <ShoppingCart className="w-5 h-5" />
             Agregar al Carrito

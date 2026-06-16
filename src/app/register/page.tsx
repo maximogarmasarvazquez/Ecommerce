@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { Leaf } from 'lucide-react'
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
@@ -39,7 +40,8 @@ export default function RegisterPage() {
         data: {
           full_name: fullName,
           role: 'customer'
-        }
+        },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       }
     })
 
@@ -54,19 +56,20 @@ export default function RegisterPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4">
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full">
-          <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-3xl">✓</span>
+          <div className="bg-white rounded-xl shadow-lg border border-stone-200 p-8 text-center">
+            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Leaf className="w-7 h-7 text-emerald-600" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-800 mb-4">¡Cuenta creada!</h1>
-            <p className="text-gray-600 mb-6">
-              Tu cuenta está lista. Podés iniciar sesión ahora.
+            <h1 className="text-2xl font-bold text-emerald-900 mb-4">Revisá tu email</h1>
+            <p className="text-stone-600 mb-6">
+              Te enviamos un link de confirmación a <strong>{email}</strong>.<br />
+              Hace clic en el link para activar tu cuenta y después iniciá sesión.
             </p>
-            <Link 
+            <Link
               href="/login"
-              className="inline-block bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-orange-700"
+              className="inline-block bg-emerald-700 text-white px-6 py-3 rounded-lg font-semibold hover:bg-emerald-600 transition-colors"
             >
               Ir a Iniciar Sesión
             </Link>
@@ -77,12 +80,13 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4">
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center py-12 px-4">
       <div className="max-w-md w-full">
-        <div className="bg-white rounded-xl shadow-lg p-8">
-          <h1 className="text-3xl font-bold text-center text-gray-800 mb-8">
-            Crear Cuenta
-          </h1>
+        <div className="bg-white rounded-xl shadow-lg border border-stone-200 p-8">
+          <div className="flex items-center justify-center gap-2 mb-8">
+            <Leaf className="w-6 h-6 text-emerald-600" />
+            <h1 className="text-3xl font-bold text-emerald-900">Crear Cuenta</h1>
+          </div>
 
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
@@ -92,45 +96,45 @@ export default function RegisterPage() {
 
           <form onSubmit={handleRegister} className="space-y-5">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre Completo</label>
+              <label className="block text-sm font-semibold text-stone-700 mb-2">Nombre Completo</label>
               <input
                 type="text"
                 value={fullName}
                 onChange={e => setFullName(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:ring-0 text-gray-800"
+                className="w-full px-4 py-3 border-2 border-stone-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-stone-800"
                 placeholder="Juan Pérez"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+              <label className="block text-sm font-semibold text-stone-700 mb-2">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:ring-0 text-gray-800"
+                className="w-full px-4 py-3 border-2 border-stone-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-stone-800"
                 placeholder="tu@email.com"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña</label>
+              <label className="block text-sm font-semibold text-stone-700 mb-2">Contraseña</label>
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:ring-0 text-gray-800"
+                className="w-full px-4 py-3 border-2 border-stone-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-stone-800"
                 placeholder="••••••••"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Confirmar Contraseña</label>
+              <label className="block text-sm font-semibold text-stone-700 mb-2">Confirmar Contraseña</label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:ring-0 text-gray-800"
+                className="w-full px-4 py-3 border-2 border-stone-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-stone-800"
                 placeholder="••••••••"
                 required
               />
@@ -139,16 +143,16 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-orange-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-orange-700 disabled:opacity-50 transition-colors"
+              className="w-full bg-emerald-700 text-white py-4 rounded-lg font-bold text-lg hover:bg-emerald-600 disabled:opacity-50 transition-colors"
             >
               {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
             </button>
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-gray-600">
+            <p className="text-stone-600">
               ¿Ya tenés cuenta?{' '}
-              <Link href="/login" className="text-orange-600 font-semibold hover:underline">
+              <Link href="/login" className="text-emerald-700 font-semibold hover:underline">
                 Iniciá sesión
               </Link>
             </p>
@@ -156,7 +160,7 @@ export default function RegisterPage() {
         </div>
         
         <div className="mt-6 text-center">
-          <Link href="/" className="text-gray-500 hover:text-gray-700 text-sm">
+          <Link href="/" className="text-stone-500 hover:text-emerald-700 text-sm">
             ← Volver al inicio
           </Link>
         </div>

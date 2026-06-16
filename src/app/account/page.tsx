@@ -3,8 +3,8 @@
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, LogOut, Save, AlertCircle, Loader2 } from 'lucide-react'
-import type { Order } from '@/lib/supabase/types'
+import { Package, LogOut, Save, AlertCircle, Loader2, User, Leaf } from 'lucide-react'
+import type { Order, Profile } from '@/lib/supabase/types'
 
 interface OrderItemWithProduct {
   quantity: number
@@ -16,14 +16,6 @@ interface OrderWithItems extends Order {
   order_items: OrderItemWithProduct[]
 }
 
-interface Customer {
-  id: string
-  full_name: string | null
-  email: string | null
-  phone: string | null
-  shipping_address: Record<string, string> | null
-}
-
 const statusLabels: Record<string, string> = {
   pending: 'Pendiente',
   paid: 'Pagado',
@@ -32,17 +24,17 @@ const statusLabels: Record<string, string> = {
   cancelled: 'Cancelado',
 }
 
-const statusColors: Record<string, string> = {
-  pending: 'text-yellow-600',
-  paid: 'text-green-600',
-  shipped: 'text-blue-600',
-  delivered: 'text-gray-600',
-  cancelled: 'text-red-600',
-}
+  const statusColors: Record<string, string> = {
+    pending: 'text-amber-600',
+    paid: 'text-emerald-600',
+    shipped: 'text-sky-600',
+    delivered: 'text-stone-600',
+    cancelled: 'text-red-600',
+  }
 
 export default function AccountPage() {
   const [user, setUser] = useState<any>(null)
-  const [customer, setCustomer] = useState<Customer | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(null)
   const [orders, setOrders] = useState<OrderWithItems[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -69,18 +61,18 @@ export default function AccountPage() {
 
       setUser(user)
 
-      const { data: customer } = await supabase
-        .from('customers')
+      const { data: profile } = await supabase
+        .from('profiles')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('id', user.id)
         .single()
 
-      if (customer) {
-        setCustomer(customer)
-        const addr = (customer.shipping_address || {}) as Record<string, string>
+      if (profile) {
+        setProfile(profile)
+        const addr = (profile.shipping_address || {}) as Record<string, string>
         setProfileForm({
-          full_name: customer.full_name || '',
-          phone: customer.phone || '',
+          full_name: profile.full_name || '',
+          phone: profile.phone || '',
           address: addr.address || '',
           city: addr.city || '',
           province: addr.province || '',
@@ -97,7 +89,7 @@ export default function AccountPage() {
               product:products (name)
             )
           `)
-          .eq('customer_id', customer.id)
+          .eq('customer_id', profile.id)
           .order('created_at', { ascending: false })
 
         if (ordersData) {
@@ -112,12 +104,12 @@ export default function AccountPage() {
   }, [supabase, router])
 
   const handleSaveProfile = async () => {
-    if (!customer) return
+    if (!profile) return
     setSaving(true)
     setError(null)
 
     const { error: err } = await supabase
-      .from('customers')
+      .from('profiles')
       .update({
         full_name: profileForm.full_name,
         phone: profileForm.phone,
@@ -128,7 +120,7 @@ export default function AccountPage() {
           postal_code: profileForm.postal_code,
         },
       })
-      .eq('id', customer.id)
+      .eq('id', profile.id)
 
     if (err) {
       setError('Error al guardar los datos')
@@ -144,7 +136,7 @@ export default function AccountPage() {
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8 flex justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
       </div>
     )
   }
@@ -152,19 +144,24 @@ export default function AccountPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Mi Cuenta</h1>
+        <h1 className="text-3xl font-bold text-emerald-900 flex items-center gap-3">
+          <Leaf className="w-8 h-8 text-emerald-600" />
+          Mi Cuenta
+        </h1>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+          className="flex items-center gap-2 text-stone-600 hover:text-red-600 transition-colors"
         >
           <LogOut className="w-5 h-5" />
-          Cerrar Sesion
+          Cerrar Sesión
         </button>
       </div>
 
-      {/* Profile */}
-      <div className="bg-white border rounded-lg p-6 mb-8">
-        <h2 className="text-xl font-bold mb-4">Mis Datos</h2>
+      <div className="bg-white border border-stone-200 rounded-xl p-6 mb-8 shadow-sm">
+        <h2 className="text-xl font-bold mb-4 text-emerald-900 flex items-center gap-2">
+          <User className="w-5 h-5 text-emerald-600" />
+          Mis Datos
+        </h2>
         {error && (
           <div className="flex items-center gap-2 text-red-500 mb-4 text-sm">
             <AlertCircle className="w-4 h-4" />
@@ -178,87 +175,86 @@ export default function AccountPage() {
               type="text"
               value={profileForm.full_name}
               onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
-              className="w-full px-4 py-2 border rounded-lg"
+              className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
+            <label className="block text-sm font-medium mb-1 text-stone-700">Email</label>
             <input
               type="email"
               value={user?.email || ''}
               disabled
-              className="w-full px-4 py-2 border rounded-lg bg-gray-50 text-gray-500"
+              className="w-full px-4 py-2 border border-stone-300 rounded-lg bg-stone-50 text-stone-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Telefono</label>
+            <label className="block text-sm font-medium mb-1 text-stone-700">Teléfono</label>
             <input
               type="tel"
               value={profileForm.phone}
               onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-              className="w-full px-4 py-2 border rounded-lg"
+              className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Direccion</label>
+            <label className="block text-sm font-medium mb-1 text-stone-700">Dirección</label>
             <input
               type="text"
               value={profileForm.address}
               onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
-              className="w-full px-4 py-2 border rounded-lg"
+              className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Ciudad</label>
+            <label className="block text-sm font-medium mb-1 text-stone-700">Ciudad</label>
             <input
               type="text"
               value={profileForm.city}
               onChange={(e) => setProfileForm({ ...profileForm, city: e.target.value })}
-              className="w-full px-4 py-2 border rounded-lg"
+              className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Provincia</label>
+            <label className="block text-sm font-medium mb-1 text-stone-700">Provincia</label>
             <input
               type="text"
               value={profileForm.province}
               onChange={(e) => setProfileForm({ ...profileForm, province: e.target.value })}
-              className="w-full px-4 py-2 border rounded-lg"
+              className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Codigo Postal</label>
+            <label className="block text-sm font-medium mb-1 text-stone-700">Código Postal</label>
             <input
               type="text"
               value={profileForm.postal_code}
               onChange={(e) => setProfileForm({ ...profileForm, postal_code: e.target.value })}
-              className="w-full px-4 py-2 border rounded-lg"
+              className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
         </div>
         <button
           onClick={handleSaveProfile}
           disabled={saving}
-          className="mt-4 bg-orange-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-50 flex items-center gap-2"
+          className="mt-4 bg-emerald-700 text-white px-6 py-2 rounded-lg font-semibold hover:bg-emerald-600 disabled:opacity-50 flex items-center gap-2 transition-colors"
         >
           <Save className="w-4 h-4" />
           {saving ? 'Guardando...' : 'Guardar Cambios'}
         </button>
       </div>
 
-      {/* Orders */}
-      <div className="bg-white border rounded-lg p-6">
-        <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-          <Package className="w-5 h-5" />
+      <div className="bg-white border border-stone-200 rounded-xl p-6 shadow-sm">
+        <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-emerald-900">
+          <Package className="w-5 h-5 text-emerald-600" />
           Mis Pedidos
         </h2>
 
         {orders.length === 0 ? (
-          <p className="text-gray-500">No tienes pedidos aun</p>
+          <p className="text-stone-500">No tenés pedidos aún</p>
         ) : (
           <div className="space-y-4">
             {orders.map((order) => (
-              <div key={order.id} className="border rounded-lg p-4">
+              <div key={order.id} className="border border-stone-200 rounded-lg p-4">
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <p className="font-mono text-sm text-gray-500">

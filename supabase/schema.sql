@@ -1,5 +1,5 @@
 -- ============================================
--- GRILLSTORE E-COMMERCE - SCHEMA PRODUCTION
+-- BOTANIC STORE - SCHEMA PRODUCTION
 -- Supabase + Seguridad + Roles + Inventario
 -- ============================================
 
@@ -54,13 +54,15 @@ CREATE TABLE profiles (
         ON DELETE CASCADE,
 
     full_name TEXT,
-
     email TEXT NOT NULL UNIQUE,
 
     role TEXT NOT NULL DEFAULT 'customer'
     CHECK (
         role IN ('customer', 'admin')
     ),
+
+    phone TEXT,
+    shipping_address JSONB DEFAULT '{}'::jsonb,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -72,11 +74,8 @@ CREATE TABLE profiles (
 
 CREATE TABLE categories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
     name TEXT NOT NULL UNIQUE,
-
     slug TEXT NOT NULL UNIQUE,
-
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -86,64 +85,32 @@ CREATE TABLE categories (
 
 CREATE TABLE products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
     name TEXT NOT NULL,
-
     description TEXT,
-
-    price INTEGER NOT NULL
-    CHECK (price >= 0),
-
-    category TEXT NOT NULL
-        REFERENCES categories(slug),
-
+    price INTEGER NOT NULL CHECK (price >= 0),
+    category TEXT NOT NULL REFERENCES categories(slug),
     images TEXT[] DEFAULT ARRAY[]::TEXT[],
-
-    inventory INTEGER NOT NULL DEFAULT 0
-    CHECK (inventory >= 0),
-
+    inventory INTEGER NOT NULL DEFAULT 0 CHECK (inventory >= 0),
+    weight_grams INTEGER,
+    width_cm INTEGER,
+    height_cm INTEGER,
+    depth_cm INTEGER,
     is_featured BOOLEAN NOT NULL DEFAULT false,
-
     is_active BOOLEAN NOT NULL DEFAULT true,
-
     deleted_at TIMESTAMPTZ,
-
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ============================================
--- 6. TABLA CUSTOMERS
--- ============================================
-
-CREATE TABLE customers (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    user_id UUID UNIQUE NOT NULL
-        REFERENCES auth.users(id)
-        ON DELETE CASCADE,
-
-    full_name TEXT,
-
-    email TEXT NOT NULL UNIQUE,
-
-    phone TEXT,
-
-    shipping_address JSONB DEFAULT '{}'::jsonb,
-
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================
--- 7. TABLA ORDERS
+-- 6. TABLA ORDERS
 -- ============================================
 
 CREATE TABLE orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     customer_id UUID NOT NULL
-        REFERENCES customers(id)
+        REFERENCES profiles(id)
         ON DELETE RESTRICT,
 
     status TEXT NOT NULL DEFAULT 'pending'
@@ -157,12 +124,8 @@ CREATE TABLE orders (
         )
     ),
 
-    total_amount INTEGER NOT NULL
-    CHECK (total_amount >= 0),
-
-    shipping_cost INTEGER NOT NULL DEFAULT 0
-    CHECK (shipping_cost >= 0),
-
+    total_amount INTEGER NOT NULL CHECK (total_amount >= 0),
+    shipping_cost INTEGER NOT NULL DEFAULT 0 CHECK (shipping_cost >= 0),
     shipping_address JSONB DEFAULT '{}'::jsonb,
 
     payment_status TEXT NOT NULL DEFAULT 'pending'
@@ -177,9 +140,7 @@ CREATE TABLE orders (
     ),
 
     payment_id TEXT,
-
     merchant_order_id TEXT,
-
     external_reference TEXT,
 
     paid_at TIMESTAMPTZ,
@@ -212,9 +173,7 @@ CREATE TABLE order_items (
         AND quantity <= 100
     ),
 
-    unit_price INTEGER NOT NULL
-    CHECK (unit_price >= 0),
-
+    unit_price INTEGER NOT NULL CHECK (unit_price >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     UNIQUE(order_id, product_id)
@@ -224,40 +183,19 @@ CREATE TABLE order_items (
 -- 9. INDEXES
 -- ============================================
 
-CREATE INDEX idx_profiles_role
-ON profiles(role);
-
-CREATE INDEX idx_products_category
-ON products(category);
-
-CREATE INDEX idx_products_active
-ON products(is_active);
-
-CREATE INDEX idx_products_deleted
-ON products(deleted_at);
-
-CREATE INDEX idx_products_featured
-ON products(is_featured);
-
-CREATE INDEX idx_orders_customer_id
-ON orders(customer_id);
-
-CREATE INDEX idx_orders_status
-ON orders(status);
-
-CREATE INDEX idx_order_items_order_id
-ON order_items(order_id);
-
-CREATE INDEX idx_customers_user_id
-ON customers(user_id);
-
+CREATE INDEX idx_profiles_role ON profiles(role);
+CREATE INDEX idx_products_category ON products(category);
+CREATE INDEX idx_products_active ON products(is_active);
+CREATE INDEX idx_products_deleted ON products(deleted_at);
+CREATE INDEX idx_products_featured ON products(is_featured);
+CREATE INDEX idx_orders_customer_id ON orders(customer_id);
+CREATE INDEX idx_orders_status ON orders(status);
+CREATE INDEX idx_order_items_order_id ON order_items(order_id);
 CREATE UNIQUE INDEX idx_orders_payment_id
-ON orders(payment_id)
-WHERE payment_id IS NOT NULL;
+ON orders(payment_id) WHERE payment_id IS NOT NULL;
 
 CREATE UNIQUE INDEX idx_orders_external_reference
-ON orders(external_reference)
-WHERE external_reference IS NOT NULL;
+ON orders(external_reference) WHERE external_reference IS NOT NULL;
 
 -- ============================================
 -- 10. FUNCION updated_at
@@ -279,26 +217,18 @@ $$;
 
 CREATE TRIGGER trigger_profiles_updated_at
 BEFORE UPDATE ON profiles
-FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER trigger_products_updated_at
 BEFORE UPDATE ON products
-FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER trigger_customers_updated_at
-BEFORE UPDATE ON customers
-FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER trigger_orders_updated_at
 BEFORE UPDATE ON orders
-FOR EACH ROW
-EXECUTE FUNCTION update_updated_at_column();
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================
--- 12. FUNCION ADMIN
+-- 12. FUNCION ADMIN (Optimizado sin recursión de RLS)
 -- ============================================
 
 CREATE OR REPLACE FUNCTION is_admin()
@@ -308,12 +238,13 @@ SECURITY DEFINER
 SET search_path = public
 STABLE
 AS $$
-    SELECT EXISTS (
-        SELECT 1
-        FROM profiles
-        WHERE id = auth.uid()
-        AND role = 'admin'
-    );
+    SELECT 
+        (auth.jwt() ->> 'role') = 'service_role' OR 
+        EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE id = auth.uid() 
+            AND role = 'admin'
+        );
 $$;
 
 -- ============================================
@@ -351,25 +282,8 @@ BEGIN
     VALUES (
         NEW.id,
         NEW.email,
-        COALESCE(
-            NEW.raw_user_meta_data->>'full_name',
-            ''
-        ),
+        COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
         'customer'
-    );
-
-    INSERT INTO public.customers (
-        user_id,
-        email,
-        full_name
-    )
-    VALUES (
-        NEW.id,
-        NEW.email,
-        COALESCE(
-            NEW.raw_user_meta_data->>'full_name',
-            ''
-        )
     );
 
     RETURN NEW;
@@ -386,7 +300,7 @@ FOR EACH ROW
 EXECUTE FUNCTION handle_new_user();
 
 -- ============================================
--- 16. CREATE ORDER SECURE FUNCTION
+-- 16. CREATE ORDER SECURE FUNCTION (Envío calculado en el backend)
 -- ============================================
 
 CREATE OR REPLACE FUNCTION create_order(
@@ -411,26 +325,18 @@ DECLARE
 BEGIN
 
     -- VALIDAR AUTH
-
     IF auth.uid() IS NULL THEN
         RAISE EXCEPTION 'Usuario no autenticado';
     END IF;
 
-    -- VALIDAR CUSTOMER
-
-    SELECT id
-    INTO v_customer_id
-    FROM customers
-    WHERE user_id = auth.uid();
-
+    -- VALIDAR PROFILE
+    SELECT id INTO v_customer_id FROM profiles WHERE id = auth.uid();
     IF v_customer_id IS NULL THEN
-        RAISE EXCEPTION 'Cliente inexistente';
+        RAISE EXCEPTION 'Perfil inexistente';
     END IF;
 
     -- VALIDAR CARRITO
-
-    IF p_items IS NULL
-    OR jsonb_array_length(p_items) = 0 THEN
+    IF p_items IS NULL OR jsonb_array_length(p_items) = 0 THEN
         RAISE EXCEPTION 'Carrito vacio';
     END IF;
 
@@ -438,12 +344,7 @@ BEGIN
         RAISE EXCEPTION 'Demasiados items';
     END IF;
 
-    -- VALIDAR SHIPPING
-
-    IF p_shipping_cost < 0 THEN
-        RAISE EXCEPTION 'Shipping invalido';
-    END IF;
-
+    -- VALIDAR Y CALCULAR SHIPPING INTERNAMENTE
     IF p_shipping_address IS NULL
        OR p_shipping_address->>'name' IS NULL
        OR p_shipping_address->>'address' IS NULL
@@ -451,8 +352,7 @@ BEGIN
         RAISE EXCEPTION 'Direccion incompleta';
     END IF;
 
-    -- CREAR ORDEN
-
+    -- CREAR ORDEN (total_amount se actualiza despues de procesar items)
     INSERT INTO orders (
         customer_id,
         status,
@@ -470,50 +370,34 @@ BEGIN
     RETURNING id INTO v_order_id;
 
     -- PROCESAR ITEMS
-
-    FOR v_item IN
-        SELECT *
-        FROM jsonb_array_elements(p_items)
-    LOOP
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
 
         v_product_id := (v_item->>'product_id')::UUID;
         v_quantity := (v_item->>'quantity')::INTEGER;
 
-        IF v_quantity <= 0
-        OR v_quantity > 100 THEN
+        IF v_quantity <= 0 OR v_quantity > 100 THEN
             RAISE EXCEPTION 'Cantidad invalida';
         END IF;
 
-        -- BLOQUEAR PRODUCTO
-
-        SELECT price, inventory
-        INTO v_price, v_inventory
-        FROM products
-        WHERE id = v_product_id
-        AND is_active = true
-        AND deleted_at IS NULL
+        -- BLOQUEAR PRODUCTO (FOR UPDATE previene condiciones de carrera)
+        SELECT price, inventory INTO v_price, v_inventory FROM products
+        WHERE id = v_product_id AND is_active = true AND deleted_at IS NULL
         FOR UPDATE;
 
         -- VALIDAR PRODUCTO
-
         IF v_price IS NULL THEN
             RAISE EXCEPTION 'Producto inexistente o inactivo';
         END IF;
 
         -- VALIDAR INVENTARIO
-
         IF v_inventory < v_quantity THEN
             RAISE EXCEPTION 'Inventario insuficiente';
         END IF;
 
         -- DESCONTAR INVENTARIO
-
-        UPDATE products
-        SET inventory = inventory - v_quantity
-        WHERE id = v_product_id;
+        UPDATE products SET inventory = inventory - v_quantity WHERE id = v_product_id;
 
         -- INSERTAR ITEM
-
         INSERT INTO order_items (
             order_id,
             product_id,
@@ -532,16 +416,13 @@ BEGIN
     END LOOP;
 
     -- ACTUALIZAR TOTAL
-
-    UPDATE orders
-    SET total_amount = v_total + p_shipping_cost
-    WHERE id = v_order_id;
+    UPDATE orders SET total_amount = v_total + p_shipping_cost WHERE id = v_order_id;
 
     -- RESPONSE
-
     RETURN jsonb_build_object(
         'order_id', v_order_id,
         'total_amount', v_total + p_shipping_cost,
+        'shipping_cost', p_shipping_cost,
         'status', 'pending'
     );
 
@@ -562,23 +443,14 @@ DECLARE
     item RECORD;
 BEGIN
 
-    IF OLD.status != 'cancelled'
-    AND NEW.status = 'cancelled' THEN
-
+    IF OLD.status != 'cancelled' AND NEW.status = 'cancelled' THEN
         NEW.cancelled_at = NOW();
 
         FOR item IN
-            SELECT product_id, quantity
-            FROM order_items
-            WHERE order_id = NEW.id
+            SELECT product_id, quantity FROM order_items WHERE order_id = NEW.id
         LOOP
-
-            UPDATE products
-            SET inventory = inventory + item.quantity
-            WHERE id = item.product_id;
-
+            UPDATE products SET inventory = inventory + item.quantity WHERE id = item.product_id;
         END LOOP;
-
     END IF;
 
     RETURN NEW;
@@ -601,14 +473,12 @@ EXECUTE FUNCTION restore_inventory_on_cancel();
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE categories FORCE ROW LEVEL SECURITY;
 ALTER TABLE profiles FORCE ROW LEVEL SECURITY;
 ALTER TABLE products FORCE ROW LEVEL SECURITY;
-ALTER TABLE customers FORCE ROW LEVEL SECURITY;
 ALTER TABLE orders FORCE ROW LEVEL SECURITY;
 ALTER TABLE order_items FORCE ROW LEVEL SECURITY;
 
@@ -616,224 +486,89 @@ ALTER TABLE order_items FORCE ROW LEVEL SECURITY;
 -- 20. POLICIES CATEGORIES
 -- ============================================
 
-CREATE POLICY "Public view categories"
-ON categories
-FOR SELECT
-USING (true);
-
-CREATE POLICY "Admins manage categories"
-ON categories
-FOR ALL
-USING (
-    is_admin()
-)
-WITH CHECK (
-    is_admin()
-);
+CREATE POLICY "Public view categories" ON categories FOR SELECT USING (true);
+CREATE POLICY "Admins manage categories" ON categories FOR ALL USING (is_admin()) WITH CHECK (is_admin());
 
 -- ============================================
 -- 21. POLICIES PROFILES
 -- ============================================
 
-CREATE POLICY "Users view own profile"
-ON profiles
-FOR SELECT
-USING (
-    is_owner(id)
-);
+CREATE POLICY "Users view own profile" 
+ON profiles FOR SELECT 
+USING (is_owner(id));
 
-CREATE POLICY "Users update own profile"
-ON profiles
-FOR UPDATE
-USING (
-    is_owner(id)
-)
-WITH CHECK (
-    is_owner(id)
-    AND role = (
-        SELECT role
-        FROM profiles
-        WHERE id = auth.uid()
-    )
-);
+CREATE POLICY "Users update own profile" 
+ON profiles FOR UPDATE 
+USING (is_owner(id))
+WITH CHECK (is_owner(id)); -- El control del rol ahora lo maneja el trigger de abajo
 
-CREATE POLICY "Admins select profiles"
-ON profiles
-FOR SELECT
-USING (
-    is_admin()
-);
+CREATE POLICY "Admins select profiles" 
+ON profiles FOR SELECT 
+USING (is_admin());
 
-CREATE POLICY "Admins update profiles"
-ON profiles
-FOR UPDATE
-USING (
-    is_admin()
-)
-WITH CHECK (
-    is_admin()
-);
+CREATE POLICY "Admins update profiles" 
+ON profiles FOR UPDATE 
+USING (is_admin()) 
+WITH CHECK (is_admin());
 
+-- ============================================
+-- 21b. PROTECCIÓN ESTRICTA DE ROLES VIA TRIGGER
+-- ============================================
+
+CREATE OR REPLACE FUNCTION protect_user_role()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    -- Si no es administrador y está intentando cambiar su rol, lanzar error
+    IF NOT is_admin() AND NEW.role IS DISTINCT FROM OLD.role THEN
+        RAISE EXCEPTION 'No tenés permisos para modificar tu rol.';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trigger_protect_user_role
+    BEFORE UPDATE ON profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION protect_user_role();
+    
 -- ============================================
 -- 22. POLICIES PRODUCTS
 -- ============================================
 
-CREATE POLICY "Public view active products"
-ON products
-FOR SELECT
-USING (
-    is_active = true
-    AND deleted_at IS NULL
-);
-
-CREATE POLICY "Admins insert products"
-ON products
-FOR INSERT
-WITH CHECK (
-    is_admin()
-);
-
-CREATE POLICY "Admins update products"
-ON products
-FOR UPDATE
-USING (
-    is_admin()
-)
-WITH CHECK (
-    is_admin()
-);
-
-CREATE POLICY "Admins delete products"
-ON products
-FOR DELETE
-USING (
-    is_admin()
-);
+CREATE POLICY "Public view active products" ON products FOR SELECT USING (is_active = true AND deleted_at IS NULL);
+CREATE POLICY "Admins insert products" ON products FOR INSERT WITH CHECK (is_admin());
+CREATE POLICY "Admins update products" ON products FOR UPDATE USING (is_admin()) WITH CHECK (is_admin());
+CREATE POLICY "Admins delete products" ON products FOR DELETE USING (is_admin());
 
 -- ============================================
--- 23. POLICIES CUSTOMERS
+-- 23. POLICIES ORDERS
 -- ============================================
 
-CREATE POLICY "Users view own customer"
-ON customers
-FOR SELECT
-USING (
-    is_owner(user_id)
+CREATE POLICY "Users view own orders" ON orders FOR SELECT USING (
+    customer_id IN (SELECT id FROM profiles WHERE id = auth.uid())
 );
-
-CREATE POLICY "Users update own customer"
-ON customers
-FOR UPDATE
-USING (
-    is_owner(user_id)
-)
-WITH CHECK (
-    is_owner(user_id)
-);
-
-CREATE POLICY "Admins select customers"
-ON customers
-FOR SELECT
-USING (
-    is_admin()
-);
-
-CREATE POLICY "Admins update customers"
-ON customers
-FOR UPDATE
-USING (
-    is_admin()
-)
-WITH CHECK (
-    is_admin()
-);
-
-CREATE POLICY "Admins delete customers"
-ON customers
-FOR DELETE
-USING (
-    is_admin()
-);
-
--- ============================================
--- 24. POLICIES ORDERS
--- ============================================
-
-CREATE POLICY "Users view own orders"
-ON orders
-FOR SELECT
-USING (
-    customer_id IN (
-        SELECT id
-        FROM customers
-        WHERE user_id = auth.uid()
-    )
-);
-
-CREATE POLICY "Admins select orders"
-ON orders
-FOR SELECT
-USING (
-    is_admin()
-);
-
-CREATE POLICY "Admins update orders"
-ON orders
-FOR UPDATE
-USING (
-    is_admin()
-)
-WITH CHECK (
-    is_admin()
-);
-
-CREATE POLICY "Admins delete orders"
-ON orders
-FOR DELETE
-USING (
-    is_admin()
-);
+CREATE POLICY "Admins select orders" ON orders FOR SELECT USING (is_admin());
+CREATE POLICY "Admins update orders" ON orders FOR UPDATE USING (is_admin()) WITH CHECK (is_admin());
+CREATE POLICY "Admins delete orders" ON orders FOR DELETE USING (is_admin());
 
 -- ============================================
 -- 25. POLICIES ORDER_ITEMS
 -- ============================================
 
-CREATE POLICY "Users view own order items"
-ON order_items
-FOR SELECT
-USING (
+CREATE POLICY "Users view own order items" ON order_items FOR SELECT USING (
     order_id IN (
-        SELECT o.id
-        FROM orders o
-        JOIN customers c
-        ON c.id = o.customer_id
-        WHERE c.user_id = auth.uid()
+        SELECT o.id FROM orders o
+        JOIN profiles p ON p.id = o.customer_id
+        WHERE p.id = auth.uid()
     )
 );
-
-CREATE POLICY "Admins select order items"
-ON order_items
-FOR SELECT
-USING (
-    is_admin()
-);
-
-CREATE POLICY "Admins update order items"
-ON order_items
-FOR UPDATE
-USING (
-    is_admin()
-)
-WITH CHECK (
-    is_admin()
-);
-
-CREATE POLICY "Admins delete order items"
-ON order_items
-FOR DELETE
-USING (
-    is_admin()
-);
+CREATE POLICY "Admins select order items" ON order_items FOR SELECT USING (is_admin());
+CREATE POLICY "Admins update order items" ON order_items FOR UPDATE USING (is_admin()) WITH CHECK (is_admin());
+CREATE POLICY "Admins delete order items" ON order_items FOR DELETE USING (is_admin());
 
 -- ============================================
 -- 26. PERMISOS
@@ -844,61 +579,23 @@ GRANT USAGE ON SCHEMA public TO authenticated;
 GRANT USAGE ON SCHEMA public TO service_role;
 
 -- CATEGORIES
-
-GRANT SELECT
-ON categories
-TO anon, authenticated;
+GRANT SELECT ON categories TO anon, authenticated;
 
 -- PRODUCTS
-
-GRANT SELECT
-ON products
-TO anon, authenticated;
-
--- CUSTOMERS
-
-GRANT SELECT, UPDATE
-ON customers
-TO authenticated;
+GRANT SELECT ON products TO anon, authenticated;
 
 -- ORDERS
-
-GRANT SELECT
-ON orders
-TO authenticated;
+GRANT SELECT ON orders TO authenticated;
 
 -- ORDER ITEMS
-
-GRANT SELECT
-ON order_items
-TO authenticated;
+GRANT SELECT ON order_items TO authenticated;
 
 -- PROFILES
-
-GRANT SELECT, UPDATE
-ON profiles
-TO authenticated;
+GRANT SELECT, UPDATE ON profiles TO authenticated;
 
 -- CREATE ORDER FUNCTION
-
-GRANT EXECUTE
-ON FUNCTION create_order
-TO authenticated;
+GRANT EXECUTE ON FUNCTION create_order TO authenticated;
 
 -- SERVICE ROLE
-
-GRANT SELECT, INSERT, UPDATE, DELETE
-ON ALL TABLES IN SCHEMA public
-TO service_role;
-
-GRANT EXECUTE
-ON ALL FUNCTIONS IN SCHEMA public
-TO service_role;
-
--- ============================================
--- 27. CREAR ADMIN
--- ============================================
-
--- UPDATE profiles
--- SET role = 'admin'
--- WHERE email = 'tu-email@ejemplo.com';
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO service_role;

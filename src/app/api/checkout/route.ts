@@ -1,13 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { MercadoPagoConfig, Preference } from 'mercadopago'
-
-const FREE_SHIPPING_MIN = 200000
-
-function calculateShippingCost(totalAmount: number): number {
-  return totalAmount >= FREE_SHIPPING_MIN ? 0 : 15000
-}
+import { calculateShipping } from '@/lib/shipping'
 
 export async function POST(request: Request) {
   try {
@@ -29,7 +23,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Direccion de envio incompleta' }, { status: 400 })
     }
 
-    // Validacion previa de productos (mejora UX, la funcion DB tambien valida)
+    if (!shipping_address.postal_code) {
+      return NextResponse.json({ error: 'Codigo postal requerido' }, { status: 400 })
+    }
+
     const supabaseAdmin = createAdminClient()
     const productIds = items.map((item: { id: string }) => item.id)
 
@@ -48,8 +45,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Validar stock y calcular total para shipping
-    let totalAmount = 0
     const itemMap = new Map(items.map((i: { id: string; quantity: number }) => [i.id, i.quantity]))
 
     for (const product of products) {
@@ -60,23 +55,20 @@ export async function POST(request: Request) {
       if (product.inventory < qty) {
         return NextResponse.json({ error: `Stock insuficiente para ${product.name}` }, { status: 400 })
       }
-      totalAmount += product.price * qty
     }
 
-    const shippingCost = calculateShippingCost(totalAmount)
+    const shippingResult = await calculateShipping(items, shipping_address.postal_code)
+    const shippingCostCents = Math.round(shippingResult.rates[0]?.price * 100) || 0
 
-    // Preparar items para la funcion create_order (solo id + quantity, sin precio)
     const orderItems = items.map((item: { id: string; quantity: number }) => ({
       product_id: item.id,
       quantity: item.quantity,
     }))
 
-    // Ejecutar create_order via RPC con la sesion del usuario autenticado
-    // La funcion usa auth.uid() para identificar al cliente
     const { data: orderResult, error: orderError } = await supabase.rpc('create_order', {
       p_items: JSON.stringify(orderItems),
       p_shipping_address: shipping_address,
-      p_shipping_cost: shippingCost,
+      p_shipping_cost: shippingCostCents,
     })
 
     if (orderError) {
@@ -86,48 +78,23 @@ export async function POST(request: Request) {
 
     const orderId = orderResult.order_id
 
-    // Buscar productos con sus nombres para la preferencia de MP
-    const { data: orderItemsWithProducts } = await supabaseAdmin
-      .from('order_items')
-      .select(`
-        quantity,
-        unit_price,
-        product:products(name)
-      `)
-      .eq('order_id', orderId)
+    // Mock payment: marcar como pagada directamente (portfolio mode)
+    const { error: updateError } = await supabaseAdmin
+      .from('orders')
+      .update({
+        status: 'paid',
+        payment_status: 'approved',
+        paid_at: new Date().toISOString(),
+      })
+      .eq('id', orderId)
 
-    // Crear preferencia de Mercado Pago con precios REALES de DB
-    const mpClient = new MercadoPagoConfig({
-      accessToken: process.env.MERCADOPAGO_ACCESS_TOKEN!,
-    })
-
-    const preference = new Preference(mpClient)
-    const mpResult = await preference.create({
-      body: {
-        items: (orderItemsWithProducts || []).map((item: any, index: number) => ({
-          id: String(index + 1),
-          title: item.product?.name || 'Producto',
-          quantity: item.quantity,
-          unit_price: item.unit_price / 100,
-          currency_id: 'ARS',
-        })),
-        payer: {
-          name: shipping_address.name,
-          email: shipping_address.email || user.email,
-        },
-        back_urls: {
-          success: `${process.env.NEXT_PUBLIC_SITE_URL}/checkout/success`,
-          failure: `${process.env.NEXT_PUBLIC_SITE_URL}/checkout`,
-          pending: `${process.env.NEXT_PUBLIC_SITE_URL}/checkout`,
-        },
-        external_reference: orderId,
-        auto_return: 'approved',
-      },
-    })
+    if (updateError) {
+      console.error('Error updating order to paid:', updateError)
+    }
 
     return NextResponse.json({
-      init_point: mpResult.init_point,
       order_id: orderId,
+      shipping_cost: shippingCostCents,
     })
   } catch (error) {
     console.error('Checkout error:', error)

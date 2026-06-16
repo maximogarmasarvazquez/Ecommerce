@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { Leaf } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -32,12 +33,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center py-12 px-4">
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center py-12 px-4">
       <div className="max-w-md w-full">
-        <div className="bg-white rounded-xl shadow-lg p-8">
-          <h1 className="text-3xl font-bold text-center text-gray-800 mb-8">
-            Iniciar Sesión
-          </h1>
+        <div className="bg-white rounded-xl shadow-lg border border-stone-200 p-8">
+          <div className="flex items-center justify-center gap-2 mb-8">
+            <Leaf className="w-6 h-6 text-emerald-600" />
+            <h1 className="text-3xl font-bold text-emerald-900">Iniciar Sesión</h1>
+          </div>
 
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
@@ -47,23 +49,23 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+              <label className="block text-sm font-semibold text-stone-700 mb-2">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:ring-0 text-gray-800"
+                className="w-full px-4 py-3 border-2 border-stone-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-stone-800"
                 placeholder="tu@email.com"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña</label>
+              <label className="block text-sm font-semibold text-stone-700 mb-2">Contraseña</label>
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-orange-500 focus:ring-0 text-gray-800"
+                className="w-full px-4 py-3 border-2 border-stone-200 rounded-lg focus:border-emerald-500 focus:ring-0 text-stone-800"
                 placeholder="••••••••"
                 required
               />
@@ -72,16 +74,16 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-orange-600 text-white py-4 rounded-lg font-bold text-lg hover:bg-orange-700 disabled:opacity-50 transition-colors"
+              className="w-full bg-emerald-700 text-white py-4 rounded-lg font-bold text-lg hover:bg-emerald-600 disabled:opacity-50 transition-colors"
             >
               {loading ? 'Ingresando...' : 'Entrar'}
             </button>
           </form>
 
           <div className="mt-8 text-center">
-            <p className="text-gray-600">
+            <p className="text-stone-600">
               ¿No tenés cuenta?{' '}
-              <Link href="/register" className="text-orange-600 font-semibold hover:underline">
+              <Link href="/register" className="text-emerald-700 font-semibold hover:underline">
                 Registrate aquí
               </Link>
             </p>
@@ -89,7 +91,7 @@ export default function LoginPage() {
         </div>
         
         <div className="mt-6 text-center">
-          <Link href="/" className="text-gray-500 hover:text-gray-700 text-sm">
+          <Link href="/" className="text-stone-500 hover:text-emerald-700 text-sm">
             ← Volver al inicio
           </Link>
         </div>

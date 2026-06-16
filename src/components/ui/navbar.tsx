@@ -1,10 +1,17 @@
 'use client'
 
 import Link from 'next/link'
-import { ShoppingCart, User, Menu, Settings } from 'lucide-react'
+import { ShoppingCart, User, Menu, Leaf } from 'lucide-react'
 import { useCart } from '@/hooks/use-cart'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+
+const NAV_CATEGORIES = [
+  { slug: 'interior', label: 'Interior' },
+  { slug: 'exterior', label: 'Exterior' },
+  { slug: 'suculentas', label: 'Suculentas' },
+  { slug: 'macetas', label: 'Macetas' },
+]
 
 export function Navbar() {
   const { itemCount } = useCart()
@@ -31,78 +38,73 @@ export function Navbar() {
   }, [supabase])
 
   return (
-    <nav className="bg-white shadow-sm border-b" style={{ backgroundColor: '#ffffff' }}>
+    <nav className="bg-white/80 backdrop-blur-md border-b border-emerald-100 sticky top-0 z-50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link href="/" className="text-xl font-bold" style={{ color: '#000000' }}>
-            Parrillas Store
+          <Link href="/" className="flex items-center gap-2 text-emerald-800">
+            <Leaf className="w-6 h-6 text-emerald-600" />
+            <span className="text-xl font-bold">Botanic Store</span>
           </Link>
 
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-8">
-            <Link href="/products" className="font-semibold" style={{ color: '#000000' }}>
-              Productos
+          <div className="hidden md:flex items-center gap-6">
+            <Link href="/products" className="text-sm font-medium text-emerald-700 hover:text-emerald-500 transition-colors">
+              Todos
             </Link>
-            <Link href="/products?category=gas" className="font-semibold" style={{ color: '#000000' }}>
-              Gas
-            </Link>
-            <Link href="/products?category=carbon" className="font-semibold" style={{ color: '#000000' }}>
-              Carbón
-            </Link>
-            <Link href="/products?category=accesorios" className="font-semibold" style={{ color: '#000000' }}>
-              Accesorios
-            </Link>
+            {NAV_CATEGORIES.map(cat => (
+              <Link
+                key={cat.slug}
+                href={`/products?category=${cat.slug}`}
+                className="text-sm font-medium text-emerald-700 hover:text-emerald-500 transition-colors"
+              >
+                {cat.label}
+              </Link>
+            ))}
             {isAdmin && (
-              <Link href="/admin" className="font-bold" style={{ color: '#ea580c' }}>
+              <Link href="/admin" className="text-sm font-bold text-emerald-600 hover:text-emerald-500 transition-colors">
                 Admin
               </Link>
             )}
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-4">
-            <Link href="/cart" className="relative p-2" style={{ color: '#000000' }}>
-              <ShoppingCart className="w-6 h-6" />
+          <div className="flex items-center gap-3">
+            <Link href="/cart" className="relative p-2 text-emerald-700 hover:text-emerald-500 transition-colors">
+              <ShoppingCart className="w-5 h-5" />
               {itemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-orange-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 bg-emerald-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
                   {itemCount}
                 </span>
               )}
             </Link>
-            <Link href="/account" className="p-2" style={{ color: '#000000' }}>
-              <User className="w-6 h-6" />
+            <Link href="/account" className="p-2 text-emerald-700 hover:text-emerald-500 transition-colors">
+              <User className="w-5 h-5" />
             </Link>
 
-            {/* Mobile menu button */}
             <button
-              className="md:hidden p-2"
-              style={{ color: '#000000' }}
+              className="md:hidden p-2 text-emerald-700"
               onClick={() => setMenuOpen(!menuOpen)}
             >
-              <Menu className="w-6 h-6" />
+              <Menu className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Mobile Menu */}
         {menuOpen && (
-          <div className="md:hidden py-4 border-t">
-            <div className="flex flex-col gap-4">
-              <Link href="/products" className="font-semibold" style={{ color: '#000000' }}>
-                Productos
+          <div className="md:hidden py-4 border-t border-emerald-100">
+            <div className="flex flex-col gap-3">
+              <Link href="/products" className="text-sm font-medium text-emerald-700">
+                Todos los productos
               </Link>
-              <Link href="/products?category=gas" className="font-semibold" style={{ color: '#000000' }}>
-                Gas
-              </Link>
-              <Link href="/products?category=carbon" className="font-semibold" style={{ color: '#000000' }}>
-                Carbón
-              </Link>
-              <Link href="/products?category=accesorios" className="font-semibold" style={{ color: '#000000' }}>
-                Accesorios
-              </Link>
+              {NAV_CATEGORIES.map(cat => (
+                <Link
+                  key={cat.slug}
+                  href={`/products?category=${cat.slug}`}
+                  className="text-sm font-medium text-emerald-700"
+                >
+                  {cat.label}
+                </Link>
+              ))}
               {isAdmin && (
-                <Link href="/admin" className="font-bold" style={{ color: '#ea580c' }}>
+                <Link href="/admin" className="text-sm font-bold text-emerald-600">
                   Admin
                 </Link>
               )}

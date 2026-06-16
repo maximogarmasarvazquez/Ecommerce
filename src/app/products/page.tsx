@@ -148,12 +148,12 @@ const sortOptions = [
               updateParam('search', (e.target as HTMLInputElement).value)
             }
           }}
-          className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+          className="flex-1 px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
         />
         <select
           value={category}
           onChange={(e) => updateParam('category', e.target.value)}
-          className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"
+          className="px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
         >
           <option value="">Todas las categorias</option>
           {categories.map((cat) => (
@@ -165,7 +165,7 @@ const sortOptions = [
         <select
           value={sort}
           onChange={(e) => updateParam('sort', e.target.value)}
-          className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500"
+          className="px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500"
         >
           {sortOptions.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -186,13 +186,13 @@ const sortOptions = [
       {/* Loading State */}
       {loading && (
         <div className="flex justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
         </div>
       )}
 
       {/* Empty State */}
       {!loading && !error && products.length === 0 && (
-        <div className="text-center py-12 text-gray-500">
+        <div className="text-center py-12 text-stone-400">
           <p>No se encontraron productos</p>
         </div>
       )}
@@ -200,7 +200,7 @@ const sortOptions = [
       {/* Products Grid */}
       {!loading && !error && products.length > 0 && (
         <>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-stone-500 mb-4">
             {totalCount} producto{(totalCount !== 1 ? 's' : '')} encontrado{(totalCount !== 1 ? 's' : '')}
           </p>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -218,8 +218,8 @@ const sortOptions = [
                   onClick={() => updateParam('page', String(p))}
                   className={`px-4 py-2 rounded-lg text-sm font-medium ${
                     p === page
-                      ? 'bg-orange-600 text-white'
-                      : 'border hover:bg-gray-50'
+                      ? 'bg-emerald-700 text-white'
+                      : 'border border-stone-300 hover:bg-stone-50'
                   }`}
                 >
                   {p}

@@ -3,7 +3,8 @@
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, ShoppingCart, Users, Plus, Edit, Trash2, Eye, Image as ImageIcon } from 'lucide-react'
+import { Package, ShoppingCart, Users, Plus, Edit, Trash2, Image as ImageIcon, Leaf } from 'lucide-react'
+import type { Profile } from '@/lib/supabase/types'
 
 interface Product {
   id: string
@@ -13,6 +14,10 @@ interface Product {
   category: string
   images: string[]
   inventory: number
+  weight_grams: number | null
+  width_cm: number | null
+  height_cm: number | null
+  depth_cm: number | null
   is_featured: boolean
   is_active: boolean
   created_at: string
@@ -24,16 +29,6 @@ interface Order {
   total_amount: number
   created_at: string
   shipping_address: any
-}
-
-interface CustomerRecord {
-  id: string
-  user_id: string
-  full_name: string | null
-  email: string | null
-  phone: string | null
-  shipping_address: any
-  created_at: string
 }
 
 interface Category {
@@ -48,7 +43,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'customers'>('products')
   const [products, setProducts] = useState<Product[]>([])
   const [orders, setOrders] = useState<Order[]>([])
-  const [customers, setCustomers] = useState<CustomerRecord[]>([])
+  const [customers, setCustomers] = useState<Profile[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
@@ -108,8 +103,9 @@ export default function AdminPage() {
 
   const fetchCustomers = async () => {
     const { data } = await supabase
-      .from('customers')
+      .from('profiles')
       .select('*')
+      .eq('role', 'customer')
       .order('created_at', { ascending: false })
 
     if (data) setCustomers(data)
@@ -125,9 +121,12 @@ export default function AdminPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Estás seguro de eliminar este producto?')) return
-    
-    const { error } = await supabase.from('products').delete().eq('id', id)
+    if (!confirm('¿Estás seguro de desactivar este producto?')) return
+
+    const { error } = await supabase
+      .from('products')
+      .update({ is_active: false, deleted_at: new Date().toISOString() })
+      .eq('id', id)
     if (!error) fetchProducts()
   }
 
@@ -161,27 +160,30 @@ export default function AdminPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Panel de Administración</h1>
+      <h1 className="text-3xl font-bold mb-8 text-emerald-900 flex items-center gap-3">
+        <Leaf className="w-8 h-8 text-emerald-600" />
+        Panel de Administración
+      </h1>
 
       {/* Tabs */}
       <div className="flex gap-4 mb-8 border-b">
         <button
           onClick={() => setActiveTab('products')}
-          className={`pb-2 px-4 font-semibold ${activeTab === 'products' ? 'border-b-2 border-orange-600 text-orange-600' : 'text-gray-500'}`}
+          className={`pb-2 px-4 font-semibold ${activeTab === 'products' ? 'border-b-2 border-emerald-700 text-emerald-700' : 'text-stone-500 hover:text-stone-700'}`}
         >
           <Package className="w-5 h-5 inline mr-2" />
           Productos
         </button>
         <button
           onClick={() => setActiveTab('orders')}
-          className={`pb-2 px-4 font-semibold ${activeTab === 'orders' ? 'border-b-2 border-orange-600 text-orange-600' : 'text-gray-500'}`}
+          className={`pb-2 px-4 font-semibold ${activeTab === 'orders' ? 'border-b-2 border-emerald-700 text-emerald-700' : 'text-stone-500 hover:text-stone-700'}`}
         >
           <ShoppingCart className="w-5 h-5 inline mr-2" />
           Pedidos
         </button>
         <button
           onClick={() => setActiveTab('customers')}
-          className={`pb-2 px-4 font-semibold ${activeTab === 'customers' ? 'border-b-2 border-orange-600 text-orange-600' : 'text-gray-500'}`}
+          className={`pb-2 px-4 font-semibold ${activeTab === 'customers' ? 'border-b-2 border-emerald-700 text-emerald-700' : 'text-stone-500 hover:text-stone-700'}`}
         >
           <Users className="w-5 h-5 inline mr-2" />
           Clientes
@@ -195,23 +197,23 @@ export default function AdminPage() {
             <h2 className="text-xl font-semibold">Gestión de Productos</h2>
             <button
               onClick={() => { setEditingProduct(null); setShowModal(true) }}
-              className="bg-orange-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-orange-700"
+              className="bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-emerald-600 transition-colors"
             >
               <Plus className="w-5 h-5" />
               Nuevo Producto
             </button>
           </div>
 
-          <div className="bg-white border rounded-lg overflow-hidden">
+          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden shadow-sm">
             <table className="w-full">
-              <thead className="bg-gray-50">
+              <thead className="bg-stone-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Nombre</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Categoría</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Precio</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Stock</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Estado</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Acciones</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-stone-700">Nombre</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-stone-700">Categoría</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-stone-700">Precio</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-stone-700">Stock</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-stone-700">Estado</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-stone-700">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -295,15 +297,15 @@ export default function AdminPage() {
       {activeTab === 'customers' && (
         <div>
           <h2 className="text-xl font-semibold mb-4">Todos los Clientes</h2>
-          <div className="bg-white border rounded-lg overflow-hidden">
+          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden shadow-sm">
             <table className="w-full">
-              <thead className="bg-gray-50">
+              <thead className="bg-stone-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Nombre</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Email</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Telefono</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Direccion</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Registro</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-stone-700">Nombre</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-stone-700">Email</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-stone-700">Teléfono</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-stone-700">Dirección</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-stone-700">Registro</th>
                 </tr>
               </thead>
               <tbody>
@@ -352,8 +354,12 @@ function ProductModal({ product, categories, onSave, onClose }: { product: Produ
     name: product?.name || '',
     description: product?.description || '',
     price: product ? product.price / 100 : 0,
-    category: product?.category || 'gas',
+    category: product?.category || 'interior',
     inventory: product?.inventory || 0,
+    weight_grams: product?.weight_grams || '',
+    width_cm: product?.width_cm || '',
+    height_cm: product?.height_cm || '',
+    depth_cm: product?.depth_cm || '',
     is_featured: product?.is_featured || false,
     is_active: product?.is_active ?? true,
     images: product?.images || [],
@@ -364,6 +370,10 @@ function ProductModal({ product, categories, onSave, onClose }: { product: Produ
     onSave({
       ...formData,
       price: Math.round(formData.price * 100),
+      weight_grams: formData.weight_grams ? parseInt(formData.weight_grams as string) : null,
+      width_cm: formData.width_cm ? parseInt(formData.width_cm as string) : null,
+      height_cm: formData.height_cm ? parseInt(formData.height_cm as string) : null,
+      depth_cm: formData.depth_cm ? parseInt(formData.depth_cm as string) : null,
     })
   }
 
@@ -418,8 +428,53 @@ function ProductModal({ product, categories, onSave, onClose }: { product: Produ
               />
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Categoría</label>
+          <fieldset className="border rounded p-4">
+            <legend className="text-sm font-medium px-2">Peso y Dimensiones (para envío)</legend>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Peso (gramos)</label>
+                <input
+                  type="number"
+                  value={formData.weight_grams as string}
+                  onChange={e => setFormData({ ...formData, weight_grams: e.target.value })}
+                  className="w-full border rounded px-3 py-2"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Ancho (cm)</label>
+                <input
+                  type="number"
+                  value={formData.width_cm as string}
+                  onChange={e => setFormData({ ...formData, width_cm: e.target.value })}
+                  className="w-full border rounded px-3 py-2"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Alto (cm)</label>
+                <input
+                  type="number"
+                  value={formData.height_cm as string}
+                  onChange={e => setFormData({ ...formData, height_cm: e.target.value })}
+                  className="w-full border rounded px-3 py-2"
+                  min={0}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Profundidad (cm)</label>
+                <input
+                  type="number"
+                  value={formData.depth_cm as string}
+                  onChange={e => setFormData({ ...formData, depth_cm: e.target.value })}
+                  className="w-full border rounded px-3 py-2"
+                  min={0}
+                />
+              </div>
+            </div>
+          </fieldset>
+            <div>
+              <label className="block text-sm font-medium mb-1">Categoría</label>
             <select
               value={formData.category}
               onChange={e => setFormData({ ...formData, category: e.target.value })}
@@ -429,8 +484,10 @@ function ProductModal({ product, categories, onSave, onClose }: { product: Produ
                 <option key={cat.slug} value={cat.slug}>{cat.name}</option>
               )) : (
                 <>
-                  <option value="gas">Gas</option>
-                  <option value="carbon">Carbón</option>
+                  <option value="interior">Interior</option>
+                  <option value="exterior">Exterior</option>
+                  <option value="suculentas">Suculentas</option>
+                  <option value="macetas">Macetas</option>
                   <option value="accesorios">Accesorios</option>
                 </>
               )}
@@ -470,7 +527,7 @@ function ProductModal({ product, categories, onSave, onClose }: { product: Produ
           <div className="flex gap-4 pt-4">
             <button
               type="submit"
-              className="flex-1 bg-orange-600 text-white py-2 rounded hover:bg-orange-700"
+              className="flex-1 bg-emerald-700 text-white py-2 rounded hover:bg-emerald-600 transition-colors"
             >
               Guardar
             </button>
