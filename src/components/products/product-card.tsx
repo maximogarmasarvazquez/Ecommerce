@@ -1,9 +1,9 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { useCart } from '@/hooks/use-cart'
 import { ShoppingCart } from 'lucide-react'
+import { ProductImage } from './product-image'
 
 interface Product {
   id: string
@@ -17,7 +17,7 @@ interface Product {
 
 export function ProductCard({ product }: { product: Product }) {
   const { addItem } = useCart()
-  const imageUrl = product.images?.[0] || '/placeholder.jpg'
+  const imageUrl = product.images?.[0]
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -26,7 +26,7 @@ export function ProductCard({ product }: { product: Product }) {
       name: product.name,
       price: product.price,
       quantity: 1,
-      image: imageUrl,
+      image: imageUrl ?? '',
     })
   }
 
@@ -34,12 +34,7 @@ export function ProductCard({ product }: { product: Product }) {
     <Link href={`/products/${product.id}`} className="block group">
       <div className="bg-white border border-stone-200 rounded-xl overflow-hidden hover:shadow-xl hover:border-emerald-200 transition-all duration-300">
         <div className="relative h-48 bg-stone-100 overflow-hidden">
-          <Image
-            src={imageUrl}
-            alt={product.name}
-            fill
-            className="object-cover group-hover:scale-105 transition-transform duration-500"
-          />
+          <ProductImage src={imageUrl} alt={product.name} category={product.category} />
         </div>
         <div className="p-4">
           <h3 className="font-semibold text-lg mb-1 line-clamp-1 text-emerald-900">{product.name}</h3>

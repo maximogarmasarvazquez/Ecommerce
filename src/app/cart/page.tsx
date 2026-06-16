@@ -1,9 +1,9 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { useCart } from '@/hooks/use-cart'
 import { Trash2, Minus, Plus, ShoppingBag, ArrowLeft } from 'lucide-react'
+import { ProductImage } from '@/components/products/product-image'
 
 export default function CartPage() {
   const { items, removeItem, updateQuantity, total } = useCart()
@@ -36,15 +36,11 @@ export default function CartPage() {
               key={item.id}
               className="bg-white border border-stone-200 rounded-lg p-4 flex gap-4"
             >
-              <div className="w-24 h-24 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
+              <div className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
                 {item.image && (
-                  <Image
-                    src={item.image}
-                    alt={item.name}
-                    width={96}
-                    height={96}
-                    className="object-cover w-full h-full"
-                  />
+                  <div className="relative w-full h-full">
+                    <ProductImage src={item.image} alt={item.name} />
+                  </div>
                 )}
               </div>
               <div className="flex-1">

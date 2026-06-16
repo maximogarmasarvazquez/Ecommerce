@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useCart } from '@/hooks/use-cart'
 import { ShoppingCart, ArrowLeft, AlertCircle, Package } from 'lucide-react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import { ProductImage } from '@/components/products/product-image'
 
 interface Product {
   id: string
@@ -106,13 +106,8 @@ export default function ProductDetailPage() {
 
       <div className="grid md:grid-cols-2 gap-8">
         {/* Image */}
-        <div className="relative h-96 bg-gray-200 rounded-lg overflow-hidden">
-          <Image
-            src={product.images?.[0] || '/placeholder.jpg'}
-            alt={product.name}
-            fill
-            className="object-cover"
-          />
+        <div className="relative h-96 rounded-lg overflow-hidden">
+          <ProductImage src={product.images?.[0]} alt={product.name} category={product.category} priority />
         </div>
 
         {/* Details */}
