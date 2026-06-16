@@ -14,8 +14,32 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [resendMsg, setResendMsg] = useState('')
   const router = useRouter()
   const supabase = createClient()
+
+  const handleResend = async () => {
+    setResending(true)
+    setResendMsg('')
+    try {
+      const res = await fetch('/api/resend-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setResendMsg('Email reenviado. Revisá tu casilla.')
+      } else {
+        setResendMsg(data.error || 'Error al reenviar')
+      }
+    } catch {
+      setResendMsg('Error de conexión')
+    } finally {
+      setResending(false)
+    }
+  }
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,12 +91,26 @@ export default function RegisterPage() {
               Te enviamos un link de confirmación a <strong>{email}</strong>.<br />
               Hace clic en el link para activar tu cuenta y después iniciá sesión.
             </p>
-            <Link
-              href="/login"
-              className="inline-block bg-emerald-700 text-white px-6 py-3 rounded-lg font-semibold hover:bg-emerald-600 transition-colors"
-            >
-              Ir a Iniciar Sesión
-            </Link>
+            {resendMsg && (
+              <p className={`text-sm mb-4 ${resendMsg.includes('Error') ? 'text-red-500' : 'text-emerald-600'}`}>
+                {resendMsg}
+              </p>
+            )}
+            <div className="flex flex-col gap-3">
+              <Link
+                href="/login"
+                className="bg-emerald-700 text-white px-6 py-3 rounded-lg font-semibold hover:bg-emerald-600 transition-colors"
+              >
+                Ir a Iniciar Sesión
+              </Link>
+              <button
+                onClick={handleResend}
+                disabled={resending}
+                className="text-emerald-700 text-sm font-medium hover:underline disabled:opacity-50"
+              >
+                {resending ? 'Reenviando...' : 'Reenviar email de confirmación'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
