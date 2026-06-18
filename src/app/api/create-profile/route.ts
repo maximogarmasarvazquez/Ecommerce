@@ -11,7 +11,16 @@ export async function POST(request: Request) {
 
     const supabase = createAdminClient()
 
-    const { error } = await supabase
+    const { error: confirmError } = await supabase.auth.admin.updateUserById(
+      id,
+      { email_confirm: true }
+    )
+
+    if (confirmError) {
+      console.error('Auto-confirm error:', confirmError)
+    }
+
+    const { error: profileError } = await supabase
       .from('profiles')
       .upsert({
         id,
@@ -20,11 +29,14 @@ export async function POST(request: Request) {
         role: 'customer',
       }, { onConflict: 'id' })
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      autoConfirmed: !confirmError,
+    })
   } catch (error) {
     console.error('Create profile error:', error)
     return NextResponse.json({ error: 'Error al crear perfil' }, { status: 500 })

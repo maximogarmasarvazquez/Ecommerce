@@ -83,23 +83,19 @@ export default function RegisterPage() {
     }
 
     if (data.user) {
-      try {
-        await fetch('/api/create-profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: data.user.id,
-            email: data.user.email,
-            full_name: fullName,
-          }),
-        })
-      } catch (e) {
-        console.warn('Profile creation fallback failed:', e)
-      }
+      await fetch('/api/create-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: data.user.id,
+          email: data.user.email,
+          full_name: fullName,
+        }),
+      })
     }
 
-    setSuccess(true)
     setLoading(false)
+    router.push('/account')
   }
 
   if (success) {
