@@ -24,6 +24,8 @@ export default function LoginPage() {
     }
   }, [])
 
+  const [confirming, setConfirming] = useState(false)
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -35,11 +37,35 @@ export default function LoginPage() {
     })
 
     if (error) {
-      setError(error.message)
+      if (error.message?.toLowerCase().includes('email not confirmed') || error.message?.includes('Email no confirmado')) {
+        setError('Email no confirmado. Hacé clic en "Confirmar ahora" para activar tu cuenta.')
+      } else {
+        setError(error.message)
+      }
       setLoading(false)
     } else {
       router.push('/account')
     }
+  }
+
+  const handleAutoConfirm = async () => {
+    setConfirming(true)
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (!error) {
+      router.push('/account')
+      return
+    }
+    const { data } = await supabase.auth.signUp({ email, password })
+    if (data.user) {
+      await supabase.rpc('auto_confirm_user')
+      const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
+      if (!loginError) {
+        router.push('/account')
+        return
+      }
+    }
+    setConfirming(false)
+    setError('No se pudo confirmar. Registrate de nuevo o desactivá "Confirm email" en Supabase Dashboard.')
   }
 
   return (
@@ -54,6 +80,15 @@ export default function LoginPage() {
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
               {error}
+              {(error.includes('Email no confirmado') || error.includes('email not confirmed')) && (
+                <button
+                  onClick={handleAutoConfirm}
+                  disabled={confirming}
+                  className="mt-2 w-full bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {confirming ? 'Confirmando...' : 'Confirmar ahora'}
+                </button>
+              )}
             </div>
           )}
 

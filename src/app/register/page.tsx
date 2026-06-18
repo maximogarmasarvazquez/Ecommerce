@@ -53,6 +53,8 @@ export default function RegisterPage() {
         full_name: fullName,
         role: 'customer',
       }, { onConflict: 'id' })
+
+      await supabase.rpc('auto_confirm_user')
     }
 
     setLoading(false)
