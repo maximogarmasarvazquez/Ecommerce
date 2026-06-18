@@ -32,30 +32,27 @@ export default function RegisterPage() {
 
     setLoading(true)
 
-    const res = await fetch('/api/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, full_name: fullName }),
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName },
+      },
     })
 
-    const data = await res.json()
-
-    if (!res.ok) {
-      setError(data.error || 'Error al crear cuenta')
+    if (error) {
+      setError(error.message)
       setLoading(false)
       return
     }
 
-    const { error: loginError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-
-    if (loginError) {
-      setError('Cuenta creada. Iniciá sesión manualmente.')
-      setLoading(false)
-      router.push('/login')
-      return
+    if (data.user) {
+      await supabase.from('profiles').upsert({
+        id: data.user.id,
+        email,
+        full_name: fullName,
+        role: 'customer',
+      }, { onConflict: 'id' })
     }
 
     setLoading(false)
