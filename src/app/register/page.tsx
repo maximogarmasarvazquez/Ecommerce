@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Leaf } from 'lucide-react'
+import { Leaf, Loader2 } from 'lucide-react'
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
@@ -13,40 +13,8 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
-  const [resending, setResending] = useState(false)
-  const [resendMsg, setResendMsg] = useState('')
   const router = useRouter()
   const supabase = createClient()
-
-  const handleResend = async () => {
-    setResending(true)
-    setResendMsg('')
-    try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
-      if (error) {
-        if (error.message?.includes('rate_limit')) {
-          setResendMsg('Esperá un momento antes de pedir otro reenvío.')
-        } else if (error.message?.includes('already_confirmed') || error.message?.includes('Email link request')) {
-          setResendMsg('Tu cuenta ya fue confirmada. Iniciá sesión.')
-        } else {
-          setResendMsg(error.message || 'Error al reenviar')
-        }
-      } else {
-        setResendMsg('Email reenviado. Revisá tu casilla (incluí spam).')
-      }
-    } catch {
-      setResendMsg('Error de conexión')
-    } finally {
-      setResending(false)
-    }
-  }
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -64,77 +32,34 @@ export default function RegisterPage() {
 
     setLoading(true)
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          role: 'customer'
-        },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      }
+    const res = await fetch('/api/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, full_name: fullName }),
     })
 
-    if (error) {
-      setError(error.message)
+    const data = await res.json()
+
+    if (!res.ok) {
+      setError(data.error || 'Error al crear cuenta')
       setLoading(false)
       return
     }
 
-    if (data.user) {
-      await fetch('/api/create-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: data.user.id,
-          email: data.user.email,
-          full_name: fullName,
-        }),
-      })
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (loginError) {
+      setError('Cuenta creada. Iniciá sesión manualmente.')
+      setLoading(false)
+      router.push('/login')
+      return
     }
 
     setLoading(false)
     router.push('/account')
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center py-12 px-4">
-        <div className="max-w-md w-full">
-          <div className="bg-white rounded-xl shadow-lg border border-stone-200 p-8 text-center">
-            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Leaf className="w-7 h-7 text-emerald-600" />
-            </div>
-            <h1 className="text-2xl font-bold text-emerald-900 mb-4">Revisá tu email</h1>
-            <p className="text-stone-600 mb-6">
-              Te enviamos un link de confirmación a <strong>{email}</strong>.<br />
-              Hace clic en el link para activar tu cuenta y después iniciá sesión.
-            </p>
-            {resendMsg && (
-              <p className={`text-sm mb-4 ${resendMsg.includes('Error') ? 'text-red-500' : 'text-emerald-600'}`}>
-                {resendMsg}
-              </p>
-            )}
-            <div className="flex flex-col gap-3">
-              <Link
-                href="/login"
-                className="bg-emerald-700 text-white px-6 py-3 rounded-lg font-semibold hover:bg-emerald-600 transition-colors"
-              >
-                Ir a Iniciar Sesión
-              </Link>
-              <button
-                onClick={handleResend}
-                disabled={resending}
-                className="text-emerald-700 text-sm font-medium hover:underline disabled:opacity-50"
-              >
-                {resending ? 'Reenviando...' : 'Reenviar email de confirmación'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -201,8 +126,9 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-emerald-700 text-white py-4 rounded-lg font-bold text-lg hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+              className="w-full bg-emerald-700 text-white py-4 rounded-lg font-bold text-lg hover:bg-emerald-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
             >
+              {loading && <Loader2 className="w-5 h-5 animate-spin" />}
               {loading ? 'Creando cuenta...' : 'Crear Cuenta'}
             </button>
           </form>
@@ -216,7 +142,7 @@ export default function RegisterPage() {
             </p>
           </div>
         </div>
-        
+
         <div className="mt-6 text-center">
           <Link href="/" className="text-stone-500 hover:text-emerald-700 text-sm">
             ← Volver al inicio
