@@ -4,6 +4,7 @@ import "./globals.css";
 import { Navbar } from "@/components/ui/navbar";
 import { CartProvider } from "@/hooks/use-cart";
 import { Leaf } from "lucide-react";
+import { Suspense } from "react";
 
 const inter = Inter({ subsets: ["latin"] });
 const playfair = Playfair_Display({ subsets: ["latin"] });
@@ -11,6 +12,7 @@ const playfair = Playfair_Display({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Botanic Store - Tu tienda de plantas favorita",
   description: "Descubrí la mejor selección de plantas y macetas para tu hogar",
+  icons: { icon: "/favicon.svg" },
 };
 
 export default function RootLayout({
@@ -22,7 +24,7 @@ export default function RootLayout({
     <html lang="es" className="h-full">
       <body className={`${inter.className} min-h-full flex flex-col bg-stone-50`}>
         <CartProvider>
-          <Navbar />
+          <Suspense fallback={null}><Navbar /></Suspense>
           <main className="flex-1">{children}</main>
           <footer className="bg-emerald-950 text-white py-12 mt-16">
             <div className="container mx-auto px-4">

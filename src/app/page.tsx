@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Leaf, Truck, Shield, Sprout, ChevronRight, Star, Mail } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { ProductImage } from '@/components/products/product-image'
+import { NewsletterForm } from '@/components/ui/newsletter-form'
 
 async function getFeaturedProducts() {
   const supabase = await createClient()
@@ -214,19 +215,7 @@ export default async function Home() {
           <p className="text-emerald-200/80 mb-8 max-w-lg mx-auto">
             Suscribite a nuestro newsletter y recibí 10% de descuento en tu primera compra, tips de cuidado y novedades
           </p>
-          <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-            <input
-              type="email"
-              placeholder="tu@email.com"
-              className="flex-1 px-4 py-3 rounded-lg text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            />
-            <button
-              type="submit"
-              className="bg-emerald-500 hover:bg-emerald-400 text-white px-6 py-3 rounded-lg font-semibold transition-all hover:shadow-lg hover:shadow-emerald-500/25 active:scale-95"
-            >
-              Suscribirme
-            </button>
-          </form>
+          <NewsletterForm />
         </div>
       </section>
     </div>

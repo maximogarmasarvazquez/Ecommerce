@@ -1,39 +1,36 @@
-# 🔥 GrillStore - E-commerce de Parrillas
+# Botanic Store - E-commerce de Plantas
 
 <p align="center">
   <img src="https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js" alt="Next.js">
   <img src="https://img.shields.io/badge/Supabase-3FFCFE?style=for-the-badge&logo=supabase" alt="Supabase">
-  <img src="https://img.shields.io/badge/Mercado%20Pago-00A1E0?style=for-the-badge&logo=mercadopago" alt="Mercado Pago">
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript" alt="TypeScript">
   <img src="https://img.shields.io/badge/Tailwind-06B6D4?style=-for-the-badge&logo=tailwind-css" alt="Tailwind">
 </p>
 
-Tienda online completa para la venta de parrillas y accesorios, construida con tecnologías modernas y escalables.
+Tienda online de plantas y macetas construida con Next.js 16, Supabase y Tailwind CSS. Demo portfolio con autenticación, carrito de compras y checkout simulado.
 
-## 🚀 Características
+## Características
 
-- **Catálogo de productos** con categorías, búsqueda y filtros
+- **Catálogo de productos** con categorías (interior, exterior, suculentas, macetas)
 - **Carrito de compras** persistido en localStorage
-- **Checkout con Mercado Pago** para pagos seguros
-- **Autenticación** de usuarios con Supabase Auth
-- **Gestión de pedidos** y seguimiento
+- **Checkout simulado** con pago mock y registro de orden en base de datos
+- **Autenticación** de usuarios con Supabase Auth (email verification)
+- **Historial de pedidos** por usuario
 - **Panel de cuenta** para usuarios registrados
-- **Reseñas y calificaciones** de productos
-- **Diseño responsivo** mobile-first
-- **Panel de administración** para gestión de productos (staff)
+- **Panel de administración** para gestión de productos
+- **Diseño responsivo** mobile-first con tema emerald/stone
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Tecnología | Descripción |
 |------------|-------------|
 | [Next.js 16](https://nextjs.org) | Framework React con App Router |
 | [Supabase](https://supabase.com) | Backend-as-a-Service: DB, Auth, Storage |
-| [Mercado Pago](https://www.mercadopago.com) | Procesamiento de pagos |
 | [Tailwind CSS](https://tailwindcss.com) | Framework de estilos |
 | [TypeScript](https://typescriptlang.org) | Tipado estático |
 | [Lucide React](https://lucide.dev) | Iconos |
 
-## 📦 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 mi-ecommerce/
@@ -50,18 +47,18 @@ mi-ecommerce/
 │   ├── lib/supabase/       # Cliente y servidor Supabase
 │   └── middleware.ts       # Autenticación SSR
 ├── supabase/
-│   └── schema.sql          # Schema de base de datos
+│   ├── schema.sql          # Schema de base de datos
+│   └── seed.sql            # Datos de ejemplo (17 productos, 5 categorías)
 ├── public/                 # Archivos estáticos
 └── package.json
 ```
 
-## 📋 Requisitos Previos
+## Requisitos Previos
 
 - Node.js 18+
 - Cuenta de [Supabase](https://supabase.com)
-- Cuenta de [Mercado Pago](https://www.mercadopago.com)
 
-## ⚙️ Instalación
+## Instalación
 
 1. **Clonar el repositorio:**
 ```bash
@@ -76,36 +73,28 @@ npm install
 
 3. **Configurar variables de entorno:**
 
-Crea un archivo `.env.local` con:
+Crear un archivo `.env.local`:
 ```env
-# Supabase
 NEXT_PUBLIC_SUPABASE_URL=tu_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_supabase_anon_key
-
-# Mercado Pago
-MERCADOPAGO_ACCESS_TOKEN=tu_mercadopago_access_token
-NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY=tu_mercadopago_public_key
-
-# App
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
 4. **Configurar Supabase:**
 
 - Crear un nuevo proyecto en [supabase.com](https://supabase.com)
-- Ejecutar el schema en el SQL Editor:
-  ```bash
-  # Copia el contenido de supabase/schema.sql y ejecútalo en el SQL Editor de Supabase
-  ```
+- Ejecutar `supabase/schema.sql` en el SQL Editor
+- (Opcional) Ejecutar `supabase/seed.sql` para cargar datos de ejemplo
+- En Authentication → Settings, configurar Site URL como `http://localhost:3000`
 
 5. **Ejecutar el servidor de desarrollo:**
 ```bash
 npm run dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
+Abrir [http://localhost:3000](http://localhost:3000).
 
-## 🔧 Scripts Disponibles
+## Scripts
 
 | Comando | Descripción |
 |---------|-------------|
@@ -114,66 +103,47 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 | `npm run start` | Inicia el servidor de producción |
 | `npm run lint` | Ejecuta el linter |
 
-## 📱 Funcionalidades Detalladas
+## Funcionalidades
 
-### 🛒 Carrito de Compras
+### Carrito de Compras
 - Persistencia en localStorage
 - Agregar/eliminar productos
 - Actualizar cantidades
 - Cálculo automático de totales
 
-### 💳 Checkout
-- Integración con Mercado Pago
-- Redirección a página de éxito
-- Almacenamiento de preference_id para tracking
+### Checkout
+- Formulario con datos de envío
+- Pago mock que marca la orden como pagada
+- Página de éxito con detalle de la orden (productos, total, dirección)
 
-### 👤 Autenticación
-- Registro e inicio de sesión
-- Integración con Supabase Auth
+### Autenticación
+- Registro con verificación de email (Supabase Auth)
+- Reenvío de email de confirmación
 - Protección de rutas via middleware
 
-### 📦 Gestión de Pedidos
+### Gestión de Pedidos
 - Historial de pedidos por usuario
 - Estados: pending, paid, shipped, delivered
-- Tracking de payment en Mercado Pago
+- Detalle de items con nombres de productos
 
-### ⭐ Reseñas
-- Sistema de rating 1-5 estrellas
-- Comentarios en productos
-- Política RLS: lectura pública, escritura autenticada
-
-## 🔐 Seguridad
+## Seguridad
 
 - **Row Level Security (RLS)** en todas las tablas
 - Políticas separadas para clientes y staff
 - Validación de datos en cliente y servidor
 
-## 🚢 Despliegue
+## Despliegue
 
-### Vercel (Recomendado)
+### Vercel
 
 1. Hacer push a GitHub
 2. Importar proyecto en [Vercel](https://vercel.com)
-3. Agregar las variables de entorno
-4. Deploy automático en cada push
+3. Agregar las variables de entorno en Project Settings → Environment Variables:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `NEXT_PUBLIC_SITE_URL` (opcional, se auto-detecta)
+4. En Supabase Dashboard → Authentication → Settings, configurar Site URL como `https://tu-dominio.vercel.app`
 
-### Variables de producción necesarias:
-```
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-MERCADOPAGO_ACCESS_TOKEN
-NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY
-NEXT_PUBLIC_SITE_URL=https://tu-dominio.com
-```
+## Licencia
 
-## 🤝 Contribuciones
-
-Las contribuciones son bienvenidas. Por favor, abre un issue primero para discutir cambios importantes.
-
-## 📄 Licencia
-
-MIT License - ver archivo LICENSE para más detalles.
-
----
-
-<p align="center">Construido con ❤️ usando Next.js + Supabase + Mercado Pago</p>
+MIT

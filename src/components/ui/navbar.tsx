@@ -5,6 +5,7 @@ import { ShoppingCart, User, Menu, Leaf } from 'lucide-react'
 import { useCart } from '@/hooks/use-cart'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { usePathname, useSearchParams } from 'next/navigation'
 
 const NAV_CATEGORIES = [
   { slug: 'interior', label: 'Interior' },
@@ -18,6 +19,9 @@ export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const supabase = createClient()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const currentCategory = searchParams.get('category')
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -47,14 +51,21 @@ export function Navbar() {
           </Link>
 
           <div className="hidden md:flex items-center gap-6">
-            <Link href="/products" className="text-sm font-medium text-emerald-700 hover:text-emerald-500 transition-colors">
+            <Link
+              href="/products"
+              className={`text-sm font-medium transition-colors ${
+                pathname === '/products' ? 'text-emerald-500' : 'text-emerald-700 hover:text-emerald-500'
+              }`}
+            >
               Todos
             </Link>
             {NAV_CATEGORIES.map(cat => (
               <Link
                 key={cat.slug}
                 href={`/products?category=${cat.slug}`}
-                className="text-sm font-medium text-emerald-700 hover:text-emerald-500 transition-colors"
+                className={`text-sm font-medium transition-colors ${
+                  pathname === '/products' && currentCategory === cat.slug ? 'text-emerald-500' : 'text-emerald-700 hover:text-emerald-500'
+                }`}
               >
                 {cat.label}
               </Link>
@@ -88,23 +99,36 @@ export function Navbar() {
           </div>
         </div>
 
-        {menuOpen && (
+          {menuOpen && (
           <div className="md:hidden py-4 border-t border-emerald-100">
             <div className="flex flex-col gap-3">
-              <Link href="/products" className="text-sm font-medium text-emerald-700">
+              <Link
+                href="/products"
+                className={`text-sm font-medium transition-colors ${
+                  pathname === '/products' ? 'text-emerald-500' : 'text-emerald-700'
+                }`}
+                onClick={() => setMenuOpen(false)}
+              >
                 Todos los productos
               </Link>
               {NAV_CATEGORIES.map(cat => (
                 <Link
                   key={cat.slug}
                   href={`/products?category=${cat.slug}`}
-                  className="text-sm font-medium text-emerald-700"
+                  className={`text-sm font-medium transition-colors ${
+                    pathname === '/products' && currentCategory === cat.slug ? 'text-emerald-500' : 'text-emerald-700'
+                  }`}
+                  onClick={() => setMenuOpen(false)}
                 >
                   {cat.label}
                 </Link>
               ))}
               {isAdmin && (
-                <Link href="/admin" className="text-sm font-bold text-emerald-600">
+                <Link
+                  href="/admin"
+                  className="text-sm font-bold text-emerald-600"
+                  onClick={() => setMenuOpen(false)}
+                >
                   Admin
                 </Link>
               )}
