@@ -1,35 +1,26 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Leaf } from 'lucide-react'
+import { Leaf, RefreshCw } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resending, setResending] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const router = useRouter()
   const supabase = createClient()
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const err = params.get('error')
-    if (err === 'link_expirado') {
-      setError('El link de confirmación expiró. Iniciá sesión para recibir uno nuevo.')
-    } else if (err === 'email_no_confirmado') {
-      setError('Email no confirmado. Revisá tu casilla o solicitá un nuevo link.')
-    }
-  }, [])
-
-  const [confirming, setConfirming] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setSuccess('')
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -37,35 +28,27 @@ export default function LoginPage() {
     })
 
     if (error) {
-      if (error.message?.toLowerCase().includes('email not confirmed') || error.message?.includes('Email no confirmado')) {
-        setError('Email no confirmado. Hacé clic en "Confirmar ahora" para activar tu cuenta.')
-      } else {
-        setError(error.message)
-      }
+      setError(error.message)
       setLoading(false)
     } else {
       router.push('/account')
     }
   }
 
-  const handleAutoConfirm = async () => {
-    setConfirming(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (!error) {
-      router.push('/account')
-      return
+  const handleResend = async () => {
+    if (!email) return
+    setResending(true)
+    setError('')
+    setSuccess('')
+
+    const { error } = await supabase.auth.resend({ type: 'signup', email })
+
+    if (error) {
+      setError(error.message)
+    } else {
+      setSuccess('Email de confirmación reenviado. Revisá tu casilla.')
     }
-    const { data } = await supabase.auth.signUp({ email, password })
-    if (data.user) {
-      await supabase.rpc('auto_confirm_user')
-      const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
-      if (!loginError) {
-        router.push('/account')
-        return
-      }
-    }
-    setConfirming(false)
-    setError('No se pudo confirmar. Registrate de nuevo o desactivá "Confirm email" en Supabase Dashboard.')
+    setResending(false)
   }
 
   return (
@@ -80,15 +63,22 @@ export default function LoginPage() {
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
               {error}
-              {(error.includes('Email no confirmado') || error.includes('email not confirmed')) && (
+              {(error.toLowerCase().includes('email not confirmed') || error.includes('Email no confirmado')) && (
                 <button
-                  onClick={handleAutoConfirm}
-                  disabled={confirming}
-                  className="mt-2 w-full bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50"
+                  onClick={handleResend}
+                  disabled={resending}
+                  className="mt-2 w-full bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {confirming ? 'Confirmando...' : 'Confirmar ahora'}
+                  <RefreshCw className={`w-4 h-4 ${resending ? 'animate-spin' : ''}`} />
+                  {resending ? 'Reenviando...' : 'Reenviar email de confirmación'}
                 </button>
               )}
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-emerald-100 border border-emerald-400 text-emerald-700 px-4 py-3 rounded-lg mb-6 text-sm">
+              {success}
             </div>
           )}
 
@@ -134,7 +124,7 @@ export default function LoginPage() {
             </p>
           </div>
         </div>
-        
+
         <div className="mt-6 text-center">
           <Link href="/" className="text-stone-500 hover:text-emerald-700 text-sm">
             ← Volver al inicio

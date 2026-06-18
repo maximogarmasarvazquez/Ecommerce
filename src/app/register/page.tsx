@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Leaf, Loader2 } from 'lucide-react'
+import { Leaf, Loader2, MailCheck } from 'lucide-react'
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
@@ -12,6 +12,7 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [fullName, setFullName] = useState('')
   const [loading, setLoading] = useState(false)
+  const [done, setDone] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
   const supabase = createClient()
@@ -37,6 +38,7 @@ export default function RegisterPage() {
       password,
       options: {
         data: { full_name: fullName },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     })
 
@@ -53,12 +55,33 @@ export default function RegisterPage() {
         full_name: fullName,
         role: 'customer',
       }, { onConflict: 'id' })
-
-      await supabase.rpc('auto_confirm_user')
     }
 
     setLoading(false)
-    router.push('/account')
+    setDone(true)
+  }
+
+  if (done) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center py-12 px-4">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-xl shadow-lg border border-stone-200 p-8 text-center">
+            <MailCheck className="w-16 h-16 text-emerald-600 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-emerald-900 mb-3">Revisá tu email</h1>
+            <p className="text-stone-600 mb-6">
+              Te enviamos un link de confirmación a <strong>{email}</strong>.
+              Hacé clic en el link para activar tu cuenta.
+            </p>
+            <Link
+              href="/login"
+              className="inline-block bg-emerald-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-emerald-600 transition-colors"
+            >
+              Ir a iniciar sesión
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
